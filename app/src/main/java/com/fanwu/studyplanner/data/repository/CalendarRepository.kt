@@ -21,4 +21,11 @@ class CalendarRepository(private val dao: CalendarEventDao) {
     suspend fun update(event: CalendarEvent) = dao.update(event.toEntity())
 
     suspend fun delete(event: CalendarEvent) = dao.delete(event.toEntity())
+
+    /** 从今天起未完成的任务，按截止时间升序 */
+    fun observePending(today: String): Flow<List<CalendarEvent>> =
+        dao.observePending(today)
+            .map { entities -> entities.map { it.toDomain() } }
+
+    suspend fun setDone(id: Long, done: Boolean) = dao.setDone(id, done)
 }

@@ -30,7 +30,7 @@ import com.fanwu.studyplanner.BuildConfig
 import com.fanwu.studyplanner.data.local.ApiKeyStore
 
 @Composable
-fun SettingsScreen(onBack: () -> Unit) {
+fun SettingsScreen(onBack: (() -> Unit)? = null) {
     val context = LocalContext.current
     val store = remember { ApiKeyStore(context.applicationContext) }
 
@@ -45,16 +45,22 @@ fun SettingsScreen(onBack: () -> Unit) {
                 .padding(innerPadding)
                 .padding(horizontal = 16.dp)
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                TextButton(onClick = onBack) { Text("返回日历") }
+            if (onBack != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = onBack) { Text("返回日历") }
+                }
             }
 
-            Text(text = "设置", style = MaterialTheme.typography.headlineSmall)
+            Text(
+                text = "我的",
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.padding(top = 12.dp)
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 

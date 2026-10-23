@@ -20,5 +20,23 @@ data class CalendarEvent(
     val startTime: String,
     val endTime: String,
     val type: EventType,
-    val note: String? = null
+    val note: String? = null,
+    /** 是否已完成，用于统计页和任务页 */
+    val isDone: Boolean = false
 )
+
+/** 事件时长（分钟），时间串非法时按 0 计 */
+fun CalendarEvent.durationMinutes(): Int {
+    val start = startTime.toMinutesOrNull() ?: return 0
+    val end = endTime.toMinutesOrNull() ?: return 0
+    return (end - start).coerceAtLeast(0)
+}
+
+/** 分钟数格式化为 "6h" / "2.5h" */
+fun formatHours(minutes: Int): String =
+    if (minutes % 60 == 0) "${minutes / 60}h" else "%.1fh".format(minutes / 60f)
+
+private fun String.toMinutesOrNull(): Int? = runCatching {
+    val (h, m) = split(":").map { it.toInt() }
+    h * 60 + m
+}.getOrNull()

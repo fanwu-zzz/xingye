@@ -41,6 +41,15 @@ class CalendarViewModel(private val repository: CalendarRepository) : ViewModel(
             events.filter { it.date == date.toString() }.sortedBy { it.startTime }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /** 选中日期所在周（周一~周日）的事件，供首页 Summary 卡使用 */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val weekEvents: StateFlow<List<CalendarEvent>> = _selectedDate
+        .flatMapLatest { d ->
+            val weekStart = d.with(java.time.DayOfWeek.MONDAY)
+            repository.observeBetween(weekStart.toString(), weekStart.plusDays(6).toString())
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     fun selectDate(date: LocalDate) {
         _selectedDate.value = date
     }

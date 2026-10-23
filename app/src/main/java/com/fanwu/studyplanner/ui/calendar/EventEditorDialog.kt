@@ -122,7 +122,8 @@ fun EventEditorDialog(
                                 startTime = startTime.trim(),
                                 endTime = endTime.trim(),
                                 type = type,
-                                note = note.trim().takeIf { it.isNotEmpty() }
+                                note = note.trim().takeIf { it.isNotEmpty() },
+                                isDone = initialEvent?.isDone ?: false
                             )
                         )
                     }

@@ -21,7 +21,8 @@ data class CalendarEventEntity(
     val startTime: String,     // HH:mm
     val endTime: String,       // HH:mm
     val type: EventType,
-    val note: String? = null
+    val note: String? = null,
+    val isDone: Boolean = false
 )
 
 fun CalendarEventEntity.toDomain(): CalendarEvent = CalendarEvent(
@@ -31,7 +32,8 @@ fun CalendarEventEntity.toDomain(): CalendarEvent = CalendarEvent(
     startTime = startTime,
     endTime = endTime,
     type = type,
-    note = note
+    note = note,
+    isDone = isDone
 )
 
 fun CalendarEvent.toEntity(): CalendarEventEntity = CalendarEventEntity(
@@ -41,5 +43,6 @@ fun CalendarEvent.toEntity(): CalendarEventEntity = CalendarEventEntity(
     startTime = startTime,
     endTime = endTime,
     type = type,
-    note = note
+    note = note,
+    isDone = isDone
 )

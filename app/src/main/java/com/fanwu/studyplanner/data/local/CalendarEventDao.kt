@@ -46,4 +46,15 @@ interface CalendarEventDao {
 
     @Query("DELETE FROM calendar_events WHERE id = :id")
     suspend fun deleteById(id: Long)
+
+    /** 查询从今天起未完成的任务，按截止时间（日期+结束时间）排序 */
+    @Query(
+        "SELECT * FROM calendar_events WHERE isDone = 0 AND date >= :today " +
+            "ORDER BY date ASC, endTime ASC"
+    )
+    fun observePending(today: String): Flow<List<CalendarEventEntity>>
+
+    /** 标记完成 / 取消完成 */
+    @Query("UPDATE calendar_events SET isDone = :done WHERE id = :id")
+    suspend fun setDone(id: Long, done: Boolean)
 }
