@@ -4,14 +4,18 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import com.fanwu.studyplanner.ui.calendar.CalendarScreen
+import com.fanwu.studyplanner.ui.chat.ChatScreen
+import com.fanwu.studyplanner.ui.settings.SettingsScreen
 import com.fanwu.studyplanner.ui.theme.StudyPlannerTheme
+
+private const val SCREEN_CALENDAR = "calendar"
+private const val SCREEN_CHAT = "chat"
+private const val SCREEN_SETTINGS = "settings"
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -19,29 +23,16 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             StudyPlannerTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = "Android",
-                        modifier = Modifier.padding(innerPadding)
+                var screen by rememberSaveable { mutableStateOf(SCREEN_CALENDAR) }
+                when (screen) {
+                    SCREEN_CHAT -> ChatScreen(onBack = { screen = SCREEN_CALENDAR })
+                    SCREEN_SETTINGS -> SettingsScreen(onBack = { screen = SCREEN_CALENDAR })
+                    else -> CalendarScreen(
+                        onOpenChat = { screen = SCREEN_CHAT },
+                        onOpenSettings = { screen = SCREEN_SETTINGS }
                     )
                 }
             }
         }
-    }
-}
-
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    StudyPlannerTheme {
-        Greeting("Android")
     }
 }
