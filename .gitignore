@@ -84,3 +84,6 @@ lint/intermediates/
 lint/generated/
 lint/outputs/
 lint/tmp/
+
+# 设计参考图（本地资源，不入库）
+design/
