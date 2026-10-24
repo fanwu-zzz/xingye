@@ -1,5 +1,6 @@
 package com.fanwu.studyplanner.ui.stats
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -11,23 +12,37 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -41,12 +56,14 @@ import java.time.temporal.ChronoUnit
 
 @Composable
 fun StatsScreen(
-    onOpenTasks: () -> Unit = {},
+    onOpenTasks: (String?) -> Unit = {},
     viewModel: StatsViewModel = viewModel(
         factory = StatsViewModel.factory(LocalContext.current)
     )
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    var deleteTarget by remember { mutableStateOf<PlanGroup?>(null) }
 
     Scaffold { innerPadding ->
         Column(
@@ -75,8 +92,9 @@ fun StatsScreen(
 
             PendingSummaryCard(
                 pendingCount = state.pendingCount,
-                upcoming = state.upcoming,
-                onOpenTasks = onOpenTasks
+                groups = state.groups,
+                onOpenTasks = onOpenTasks,
+                onDeleteRequest = { deleteTarget = it }
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -93,6 +111,34 @@ fun StatsScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
         }
+    }
+
+    deleteTarget?.let { group ->
+        val planName = group.planName ?: return@let
+        AlertDialog(
+            onDismissRequest = { deleteTarget = null },
+            title = { Text("删除计划「$planName」？") },
+            text = {
+                Text(
+                    "将同时删除该计划下的 ${group.count} 个任务，" +
+                        "日历上对应日期的日程也会一并删除。"
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.deletePlan(planName)
+                        deleteTarget = null
+                        Toast.makeText(context, "已删除计划「$planName」", Toast.LENGTH_SHORT).show()
+                    }
+                ) {
+                    Text("删除", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteTarget = null }) { Text("取消") }
+            }
+        )
     }
 }
 
@@ -129,8 +175,9 @@ private fun WeekMonthPill() {
 @Composable
 private fun PendingSummaryCard(
     pendingCount: Int,
-    upcoming: List<CalendarEvent>,
-    onOpenTasks: () -> Unit
+    groups: List<PlanGroup>,
+    onOpenTasks: (String?) -> Unit,
+    onDeleteRequest: (PlanGroup) -> Unit
 ) {
     Card(
         shape = RoundedCornerShape(20.dp),
@@ -151,7 +198,7 @@ private fun PendingSummaryCard(
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
-                        .clickable(onClick = onOpenTasks)
+                        .clickable { onOpenTasks(null) }
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 )
             }
@@ -171,7 +218,7 @@ private fun PendingSummaryCard(
                 )
             }
 
-            if (upcoming.isEmpty()) {
+            if (groups.isEmpty()) {
                 Text(
                     text = "太棒了，没有待完成的任务",
                     color = DarkBar.copy(alpha = 0.7f),
@@ -179,16 +226,134 @@ private fun PendingSummaryCard(
                     modifier = Modifier.padding(top = 4.dp)
                 )
             } else {
-                upcoming.forEach { event ->
-                    val daysLeft = daysLeft(event)
-                    Text(
-                        text = "${event.title} · 截止 ${deadlineShort(event.date)} · ${daysLeftText(daysLeft)}",
-                        color = DarkBar,
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(top = 4.dp)
+                groups.take(3).forEach { group ->
+                    PlanGroupRow(
+                        group = group,
+                        onClick = { onOpenTasks(group.planName) },
+                        onDeleteRequest = { onDeleteRequest(group) },
+                        modifier = Modifier.padding(top = 8.dp)
                     )
                 }
+                if (groups.size > 3) {
+                    Text(
+                        text = "还有 ${groups.size - 3} 个计划，点「查看全部」浏览",
+                        color = DarkBar.copy(alpha = 0.6f),
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+                if (groups.singleOrNull()?.planName == null) {
+                    Text(
+                        text = "在 AI 对话里生成计划并应用后，这里会按计划分组显示",
+                        color = DarkBar.copy(alpha = 0.6f),
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 6.dp)
+                    )
+                }
+                Text(
+                    text = "左滑计划可删除整组",
+                    color = DarkBar.copy(alpha = 0.5f),
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 6.dp)
+                )
             }
+        }
+    }
+}
+
+/** 一个计划组：组名 + 任务数 + 最近截止；左滑露出删除 */
+@Composable
+private fun PlanGroupRow(
+    group: PlanGroup,
+    onClick: () -> Unit,
+    onDeleteRequest: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (group.planName == null) {
+        // 手动创建、未归组的事件：只做展示，不提供整组删除，也不跳转
+        PlanGroupContent(group = group, onClick = {}, showArrow = false, modifier = modifier)
+        return
+    }
+
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            if (value == SwipeToDismissBoxValue.EndToStart) {
+                onDeleteRequest()
+            }
+            // 弹确认框，列表项本身保持原位
+            false
+        }
+    )
+
+    SwipeToDismissBox(
+        state = dismissState,
+        modifier = modifier,
+        enableDismissFromStartToEnd = false,
+        backgroundContent = {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFFE0524A))
+                    .padding(horizontal = 16.dp),
+                contentAlignment = Alignment.CenterEnd
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("删除", color = Color.White, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+    ) {
+        PlanGroupContent(group = group, onClick = onClick)
+    }
+}
+
+@Composable
+private fun PlanGroupContent(
+    group: PlanGroup,
+    onClick: () -> Unit,
+    showArrow: Boolean = true,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            // 必须使用不透明底色，否则左滑的红色删除层会透过卡片显示出来
+            .background(Color(0xFFFBE3CB))
+            .then(if (showArrow) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = group.planName ?: "未分组",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = DarkBar,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = "${group.count} 个任务 · 最近截止 ${deadlineShort(group.nearestDeadline)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = DarkBar.copy(alpha = 0.7f)
+            )
+        }
+        if (showArrow) {
+            Icon(
+                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = DarkBar.copy(alpha = 0.55f),
+                modifier = Modifier.size(18.dp)
+            )
         }
     }
 }

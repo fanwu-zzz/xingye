@@ -69,10 +69,18 @@ class MainActivity : ComponentActivity() {
             StudyPlannerTheme {
                 var tab by rememberSaveable { mutableStateOf(TAB_CALENDAR) }
                 var subPage by rememberSaveable { mutableStateOf<String?>(null) }
+                // 任务页按计划组筛选，空串表示不筛选
+                var tasksFilter by rememberSaveable { mutableStateOf("") }
 
                 when (subPage) {
                     SUB_CHAT -> ChatScreen(onBack = { subPage = null })
-                    SUB_TASKS -> TasksScreen(onBack = { subPage = null })
+                    SUB_TASKS -> TasksScreen(
+                        onBack = {
+                            subPage = null
+                            tasksFilter = ""
+                        },
+                        planFilter = tasksFilter.ifBlank { null }
+                    )
                     else -> Scaffold(
                         containerColor = CreamBackground,
                         bottomBar = { AppBottomBar(current = tab, onSelect = { tab = it }) }
@@ -84,7 +92,10 @@ class MainActivity : ComponentActivity() {
                         ) {
                             when (tab) {
                                 TAB_STATS -> StatsScreen(
-                                    onOpenTasks = { subPage = SUB_TASKS }
+                                    onOpenTasks = { planName ->
+                                        tasksFilter = planName ?: ""
+                                        subPage = SUB_TASKS
+                                    }
                                 )
                                 TAB_PROFILE -> SettingsScreen()
                                 else -> CalendarScreen(

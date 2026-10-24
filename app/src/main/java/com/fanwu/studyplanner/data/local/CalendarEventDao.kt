@@ -47,9 +47,9 @@ interface CalendarEventDao {
     @Query("DELETE FROM calendar_events WHERE id = :id")
     suspend fun deleteById(id: Long)
 
-    /** 查询从今天起未完成的任务，按截止时间（日期+结束时间）排序 */
+    /** 查询从今天起未完成的任务，按截止时间（日期+结束时间）排序；课程不计入待办 */
     @Query(
-        "SELECT * FROM calendar_events WHERE isDone = 0 AND date >= :today " +
+        "SELECT * FROM calendar_events WHERE isDone = 0 AND date >= :today AND type != 'CLASS' " +
             "ORDER BY date ASC, endTime ASC"
     )
     fun observePending(today: String): Flow<List<CalendarEventEntity>>
@@ -57,4 +57,8 @@ interface CalendarEventDao {
     /** 标记完成 / 取消完成 */
     @Query("UPDATE calendar_events SET isDone = :done WHERE id = :id")
     suspend fun setDone(id: Long, done: Boolean)
+
+    /** 删除某个计划组下的全部事件（日历上对应日期的日程一并消失） */
+    @Query("DELETE FROM calendar_events WHERE planName = :planName")
+    suspend fun deleteByPlanName(planName: String)
 }

@@ -22,7 +22,9 @@ data class CalendarEventEntity(
     val endTime: String,       // HH:mm
     val type: EventType,
     val note: String? = null,
-    val isDone: Boolean = false
+    val isDone: Boolean = false,
+    /** 所属计划组（即生成该计划的对话名），手动创建的事件为空 */
+    val planName: String? = null
 )
 
 fun CalendarEventEntity.toDomain(): CalendarEvent = CalendarEvent(
@@ -33,7 +35,8 @@ fun CalendarEventEntity.toDomain(): CalendarEvent = CalendarEvent(
     endTime = endTime,
     type = type,
     note = note,
-    isDone = isDone
+    isDone = isDone,
+    planName = planName
 )
 
 fun CalendarEvent.toEntity(): CalendarEventEntity = CalendarEventEntity(
@@ -44,5 +47,6 @@ fun CalendarEvent.toEntity(): CalendarEventEntity = CalendarEventEntity(
     endTime = endTime,
     type = type,
     note = note,
-    isDone = isDone
+    isDone = isDone,
+    planName = planName
 )

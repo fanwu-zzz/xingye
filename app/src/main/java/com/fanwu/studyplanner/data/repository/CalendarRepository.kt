@@ -28,4 +28,7 @@ class CalendarRepository(private val dao: CalendarEventDao) {
             .map { entities -> entities.map { it.toDomain() } }
 
     suspend fun setDone(id: Long, done: Boolean) = dao.setDone(id, done)
+
+    /** 删除整个计划组，日历上对应的日程同时删除 */
+    suspend fun deletePlan(planName: String) = dao.deleteByPlanName(planName)
 }

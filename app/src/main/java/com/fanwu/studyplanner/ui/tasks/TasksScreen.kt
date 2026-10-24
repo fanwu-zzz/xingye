@@ -31,6 +31,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -54,11 +55,16 @@ import java.time.LocalDate
 @Composable
 fun TasksScreen(
     onBack: () -> Unit,
+    planFilter: String? = null,
     viewModel: TasksViewModel = viewModel(
         factory = TasksViewModel.factory(LocalContext.current)
     )
 ) {
     val tasks by viewModel.pendingTasks.collectAsStateWithLifecycle()
+    // 从统计页某个计划组进入时只显示该组任务
+    val visibleTasks = remember(tasks, planFilter) {
+        if (planFilter == null) tasks else tasks.filter { it.planName == planFilter }
+    }
 
     Scaffold { innerPadding ->
         Column(
@@ -94,13 +100,17 @@ fun TasksScreen(
             }
 
             Text(
-                text = "共 ${tasks.size} 个任务 · 按截止时间排序",
+                text = if (planFilter == null) {
+                    "共 ${visibleTasks.size} 个任务 · 按截止时间排序"
+                } else {
+                    "计划「$planFilter」· 共 ${visibleTasks.size} 个任务"
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
             )
 
-            if (tasks.isEmpty()) {
+            if (visibleTasks.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -118,7 +128,7 @@ fun TasksScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(vertical = 8.dp)
                 ) {
-                    items(tasks, key = { it.id }) { event ->
+                    items(visibleTasks, key = { it.id }) { event ->
                         TaskRow(
                             event = event,
                             onToggle = { viewModel.setDone(event.id, !event.isDone) }
@@ -152,10 +162,17 @@ private fun TaskRow(event: CalendarEvent, onToggle: () -> Unit) {
                     overflow = TextOverflow.Ellipsis
                 )
                 val date = LocalDate.parse(event.date)
+                val meta = buildString {
+                    append(event.type.label())
+                    append(" · 截止 ${date.monthValue}月${date.dayOfMonth}日")
+                    event.planName?.let { append(" · $it") }
+                }
                 Text(
-                    text = "${event.type.label()} · 截止 ${date.monthValue}月${date.dayOfMonth}日",
+                    text = meta,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
             Spacer(modifier = Modifier.width(8.dp))
