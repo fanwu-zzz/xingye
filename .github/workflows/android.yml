@@ -23,7 +23,7 @@ jobs:
           distribution: temurin
           java-version: '17'
       - name: 配置 Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
       - name: 安装 Android 36 平台
         run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
       - name: 配置 Gradle 缓存
