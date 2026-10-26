@@ -10,7 +10,7 @@
 
 ## 技术栈
 - Kotlin 2.0.21、Jetpack Compose（BOM 2024.09.00）、Material 3、Room 2.6.1（KSP）、Retrofit + kotlinx.serialization、DeepSeek API
-- compileSdk/targetSdk 36、minSdk 26，JDK 11
+- compileSdk/targetSdk 36、minSdk 26；AGP 8.12 构建需要 JDK 17 或更高版本，Kotlin/Java 代码目标仍为 11
 - 无 Navigation 库，页面切换由 `MainActivity` 的状态驱动
 
 ## 常用命令

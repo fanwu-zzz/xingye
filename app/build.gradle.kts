@@ -8,9 +8,13 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
-// 读取 local.properties 中的 AI_API_KEY 并注入 BuildConfig，密钥不会进入版本库
+// 仅本地调试可使用编译期默认密钥。公开发布的 release 包始终为空。
 val localProperties = Properties().apply {
     val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+val releaseSigningProperties = Properties().apply {
+    val file = rootProject.file(".signing/release.properties")
     if (file.exists()) file.inputStream().use { load(it) }
 }
 
@@ -24,8 +28,8 @@ android {
         applicationId = "com.fanwu.studyplanner"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.0.0-beta.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -37,6 +41,17 @@ android {
         )
     }
 
+    signingConfigs {
+        if (releaseSigningProperties.isNotEmpty()) {
+            create("release") {
+                storeFile = rootProject.file(releaseSigningProperties.getProperty("storeFile"))
+                storePassword = releaseSigningProperties.getProperty("storePassword")
+                keyAlias = releaseSigningProperties.getProperty("keyAlias")
+                keyPassword = releaseSigningProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         create("focusTest") {
             initWith(getByName("debug"))
@@ -45,6 +60,11 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
         release {
+            // 绝不把 local.properties 里的开发者密钥编进公开 APK。
+            buildConfigField("String", "AI_API_KEY", "\"\"")
+            if (releaseSigningProperties.isNotEmpty()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }

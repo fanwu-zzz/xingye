@@ -7,7 +7,7 @@
 - 正式 App 显示名称：**星页**，来自 `res/values/strings.xml` 的 `app_name`。
 - 独立验收包显示名称：**星页（测试）**，方便与日常应用区分。
 - 桌面、设置页品牌文案、锁屏提醒标题与导出文件名前缀同步使用新名称。
-- Android applicationId 仍为 `com.fanwu.studyplanner`，工程目录、Kotlin 包名、数据库名、已存密钥及备份格式保持兼容；旧 JSON 备份仍可读取。安装新 APK 时覆盖升级，无需卸载。
+- Android applicationId 仍为 `com.fanwu.studyplanner`，工程目录、Kotlin 包名、数据库名及备份格式保持兼容；旧 JSON 备份仍可读取。同签名构建可以覆盖升级；从旧调试版迁移到公开 Release 时签名不同，需先导出备份，详见 [发布与安装](RELEASE.md#从调试版迁移)。
 
 ## 正式资源
 

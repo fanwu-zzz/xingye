@@ -1,0 +1,39 @@
+name: Android 构建与测试
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v6
+      - name: 配置 JDK
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: 配置 Android SDK
+        uses: android-actions/setup-android@v3
+      - name: 安装 Android 36 平台
+        run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
+      - name: 配置 Gradle 缓存
+        uses: gradle/actions/setup-gradle@v5
+      - name: 构建并运行单元测试
+        run: bash ./gradlew --no-daemon assembleDebug testDebugUnitTest assembleRelease
+      - name: 上传单元测试报告
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: unit-test-results
+          path: app/build/test-results/testDebugUnitTest/
+          if-no-files-found: ignore

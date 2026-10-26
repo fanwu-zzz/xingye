@@ -1,10 +1,12 @@
 # 星页 · StudyPlanner
 
-应用显示名称为「星页」，采用星星与书页精灵启动图标；品牌资源和适配说明见 [BRANDING.md](docs/BRANDING.md)。工程标识仍保留 StudyPlanner，支持原应用覆盖升级。
+<img src="docs/images/xingye.png" alt="星页的星星书页精灵图标" width="180">
 
-一个个人使用的 Android 学习计划助手：**和 AI 聊天 → 生成学习计划 → 一键写入日历 → 跟踪完成情况**。
+**把想做的学习，落到今天。** 星页是一款 Android 学习计划应用：用 AI 对话梳理目标，预览后把计划写入日历，再用课表、专注计时、提醒和复盘跟踪执行。界面采用新野兽派风格，启动图标是一只星星书页精灵。
 
-> 项目状态：F01—F06 均已接入真实功能，UI 按新野兽派实现。功能状态与后续增强见 [功能清单](docs/FEATURE_BACKLOG.md)。
+[下载最新版本](https://github.com/fanwu-zzz/xingye/releases/latest) · [功能清单](docs/FEATURE_BACKLOG.md) · [更新日志](CHANGELOG.md) · [问题反馈](https://github.com/fanwu-zzz/xingye/issues)
+
+> 当前为公开测试版。请先备份重要学习数据；AI 功能需要自行配置 DeepSeek API Key，调用可能产生服务商费用。
 
 ## 功能
 
@@ -16,7 +18,7 @@
 | 计划生成 | 根据对话生成结构化计划，可预览、改组名、确认后写入日历 | 已实现 |
 | 统计 | 周/月计划时长、完成率、每日计划图表、计划分组与整组删除；课程不计入 | 已实现 |
 | 任务页 | 搜索、待办/今天/逾期/已完成/全部、类型与计划筛选、详情与编辑 | 已实现 |
-| 本地存储 | 日历、会话、消息、API Key 全部保存在本机 | 已实现 |
+| 数据存储 | 日历、会话、消息保存在本机，API Key 在本机加密存储 | 已实现 |
 | 课表 | 周时间网格、重叠课程并列、学期/节次、单双周重复课程、单次/后续/整门调整、Excel 规则导入 | 已实现 F05 |
 | 专注 | 自定义时长、关联任务、暂停恢复、休息、后台通知、专注记录及实际时长统计 | 已实现 F01 |
 | 日程提醒 | 任务/考试及课程提醒、提前时间、静默时段、日程变更联动、通知跳转 | 已实现 F03 |
@@ -36,7 +38,13 @@
 | 序列化 | kotlinx.serialization | 1.7.3 |
 | 大模型 | DeepSeek API | - |
 
-- `compileSdk = 36`，`targetSdk = 36`，`minSdk = 26`（Android 8.0+），JDK 11
+- `compileSdk = 36`，`targetSdk = 36`，`minSdk = 26`（Android 8.0+）；构建需要 JDK 17 或更高版本。
+
+## 下载与安装
+
+到 [Releases](https://github.com/fanwu-zzz/xingye/releases) 下载标注版本的 `xingye-*.apk`，核对同页 SHA-256 后安装。下载来源请认准本仓库。
+
+包名为 `com.fanwu.studyplanner`。正式 Release 使用独立签名；如果设备上已安装此前由 Android Studio 构建的调试版，签名不同，Android 不允许直接覆盖。请先在旧版中导出备份，再按 [安装与数据迁移说明](docs/RELEASE.md#从调试版迁移)操作，避免丢失数据。后续正式 Release 使用同一签名，可覆盖升级。
 
 ## 项目结构
 
@@ -59,11 +67,12 @@ StudyPlanner/
 ## 如何运行
 
 1. 克隆仓库并用 Android Studio / IntelliJ IDEA 打开。
-2. 在**项目根目录**创建 `local.properties`（已在 `.gitignore` 中）：
+2. 安装 Android SDK 36，在**项目根目录**创建 `local.properties`（已在 `.gitignore` 中），填写本机 SDK 路径：
 
 ```properties
 sdk.dir=D\:\\Android\\Sdk
-AI_API_KEY=你的 DeepSeek API Key
+# 可选：仅本地调试使用；不要在公开或共享构建中填写自己的密钥
+# AI_API_KEY=你的 DeepSeek API Key
 ```
 
 3. 等待 Gradle Sync 完成。
@@ -74,7 +83,7 @@ AI_API_KEY=你的 DeepSeek API Key
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-也可以直接用 IDE 运行。API Key 也可以在应用「我的」页里填写，无需重新编译。
+也可以直接用 IDE 运行。API Key 可以在应用「我的」页里填写，无需重新编译。正式 Release 不包含任何编译期默认密钥。
 
 ## 数据与迁移
 
@@ -84,7 +93,8 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 ## API Key 安全
 
 - `local.properties` 已加入 `.gitignore`，**不会提交到仓库**。
-- 编译期通过 `BuildConfig.AI_API_KEY` 注入；运行时也可在「我的」页保存，Key 由 `ApiKeyStore` 用 Android Keystore 加密存在本机。
+- 本机 Debug 构建可选通过 `BuildConfig.AI_API_KEY` 注入；**Release 构建始终将其置空**。建议在「我的」页填写，Key 由 `ApiKeyStore` 使用 Android Keystore 加密保存在本机。
+- Android 系统备份和设备迁移会排除加密密钥偏好文件；应用内手动 JSON 备份也不包含密钥。换机后需要重新填写。AI 请求会把所需内容发送给 DeepSeek，详见 [数据与隐私说明](docs/PRIVACY.md)。
 - 请勿将密钥硬编码到任何 Kotlin 文件、资源文件或提交历史中。
 - 一旦密钥泄露，立即到 DeepSeek 控制台吊销并重新生成。
 
@@ -113,6 +123,6 @@ F03 的静默、去重、权限降级、通知跳转与验证方式见 [日程�
 
 F02、F04—F06 的数据结构、恢复策略、重复课程例外、AI 确认流程与验证见 [学习功能说明](docs/F02_F06_LEARNING_FEATURES.md)。设备测试仅运行 `.\gradlew.bat connectedFocusTestAndroidTest`，使用独立 `com.fanwu.studyplanner.f01test` 包；禁止用测试驱动卸载日常应用。
 
-## License
+## 参与与授权
 
-尚未添加。
+问题和建议请使用 [Issues](https://github.com/fanwu-zzz/xingye/issues)，提交代码前阅读 [贡献说明](CONTRIBUTING.md)。安全问题见 [SECURITY.md](SECURITY.md)。仓库目前**未添加开源许可证**；公开可见不代表自动授予复制、修改或再分发权利。

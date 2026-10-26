@@ -1,0 +1,18 @@
+name: 功能建议
+description: 提出学习流程或使用体验方面的改进
+title: '[建议] '
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 遇到的问题
+      description: 说说当前学习流程中哪一步不顺手
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 期望的解决方式
+    validations:
+      required: true

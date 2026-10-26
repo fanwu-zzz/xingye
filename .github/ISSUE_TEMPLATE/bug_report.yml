@@ -1,0 +1,33 @@
+name: 问题反馈
+description: 报告星页中可复现的问题
+title: '[Bug] '
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: 请先移除截图和日志中的个人课表、API Key 等敏感信息。安全漏洞请阅读 SECURITY.md，勿公开细节。
+  - type: input
+    id: version
+    attributes:
+      label: 星页版本
+      placeholder: 例如 1.0.0-beta.1
+    validations:
+      required: true
+  - type: input
+    id: android
+    attributes:
+      label: Android 版本与设备
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期结果与实际结果
+    validations:
+      required: true
