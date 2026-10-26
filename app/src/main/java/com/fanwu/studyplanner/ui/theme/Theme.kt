@@ -1,50 +1,39 @@
 package com.fanwu.studyplanner.ui.theme
 
-import android.app.Activity
-import android.os.Build
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.unit.dp
 
-private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
+private val BrutalColors = lightColorScheme(
+    primary = BrutalPink, onPrimary = BrutalBlack,
+    primaryContainer = BrutalPink, onPrimaryContainer = BrutalBlack,
+    secondary = BrutalCyan, onSecondary = BrutalBlack,
+    secondaryContainer = BrutalCyan, onSecondaryContainer = BrutalBlack,
+    tertiary = BrutalLime, onTertiary = BrutalBlack,
+    tertiaryContainer = BrutalLime, onTertiaryContainer = BrutalBlack,
+    background = BrutalPaper, onBackground = BrutalBlack,
+    surface = BrutalWhite, onSurface = BrutalBlack,
+    surfaceVariant = BrutalDisabled, onSurfaceVariant = BrutalMutedText,
+    outline = BrutalBlack, outlineVariant = BrutalBlack,
+    error = BrutalDanger, onError = BrutalWhite,
+    errorContainer = BrutalWhite, onErrorContainer = BrutalDanger,
+    inverseSurface = BrutalBlack, inverseOnSurface = BrutalWhite,
+    surfaceTint = BrutalWhite
 )
 
-private val LightColorScheme = lightColorScheme(
-    primary = OrangePrimary,
-    primaryContainer = ApricotOrange,
-    background = CreamBackground,
-    surface = Color.White
-)
-
+/** 固定浅色，避免系统取色覆盖新野兽派的语义色。 */
 @Composable
-fun StudyPlannerTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    // 关闭动态取色，保证界面与设计稿的奶白+杏橙配色一致
-    dynamicColor: Boolean = false,
-    content: @Composable () -> Unit
-) {
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
-    }
-
+fun StudyPlannerTheme(content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = colorScheme,
+        colorScheme = BrutalColors,
         typography = Typography,
+        shapes = Shapes(
+            extraSmall = RoundedCornerShape(0.dp), small = RoundedCornerShape(0.dp),
+            medium = RoundedCornerShape(0.dp), large = RoundedCornerShape(0.dp), extraLarge = RoundedCornerShape(0.dp)
+        ),
         content = content
     )
 }

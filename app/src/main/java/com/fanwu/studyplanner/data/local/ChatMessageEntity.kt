@@ -13,6 +13,7 @@ import com.fanwu.studyplanner.domain.ChatMessage
     tableName = "chat_messages",
     indices = [Index("conversationId")]
 )
+@kotlinx.serialization.Serializable
 data class ChatMessageEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val conversationId: Long,

@@ -16,6 +16,8 @@ val localProperties = Properties().apply {
 
 android {
     namespace = "com.fanwu.studyplanner"
+    // 设备测试只安装独立包，防止测试驱动卸载日常使用的应用及其数据。
+    testBuildType = "focusTest"
     compileSdk = 36
 
     defaultConfig {
@@ -36,6 +38,12 @@ android {
     }
 
     buildTypes {
+        create("focusTest") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".f01test"
+            matchingFallbacks += listOf("debug")
+            signingConfig = signingConfigs.getByName("debug")
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")

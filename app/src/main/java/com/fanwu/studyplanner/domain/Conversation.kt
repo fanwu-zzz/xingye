@@ -13,6 +13,7 @@ data class Conversation(
 )
 
 /** 对话用途 */
+@kotlinx.serialization.Serializable
 enum class ConversationMode {
     /** 和 AI 讨论学习目标，生成学习计划 */
     STUDY_PLAN,

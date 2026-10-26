@@ -8,6 +8,7 @@ import com.fanwu.studyplanner.domain.ConversationMode
  * 一轮 AI 对话（会话）的数据库实体
  */
 @Entity(tableName = "conversations")
+@kotlinx.serialization.Serializable
 data class ConversationEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,

@@ -12,6 +12,9 @@ import com.fanwu.studyplanner.data.remote.DeepSeekClient
 import com.fanwu.studyplanner.data.repository.ChatRepository
 import com.fanwu.studyplanner.data.schedule.ScheduleExpander
 import com.fanwu.studyplanner.data.schedule.XlsxReader
+import com.fanwu.studyplanner.data.schedule.managedScheduleImport
+import com.fanwu.studyplanner.data.repository.LearningRepository
+import com.fanwu.studyplanner.data.repository.CoursePreview
 import com.fanwu.studyplanner.domain.ChatMessage
 import com.fanwu.studyplanner.domain.Conversation
 import com.fanwu.studyplanner.domain.ConversationMode
@@ -37,7 +40,8 @@ data class PlanDraft(
     val name: String,
     val applied: Boolean = false,
     /** 应用前是否先删除同名计划组，课表重复导入时避免产生重复事件 */
-    val replaceExisting: Boolean = false
+    val replaceExisting: Boolean = false,
+    val coursePreview: CoursePreview? = null
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -176,7 +180,7 @@ class ChatViewModel(
     }
 
     /** 处理一次课表解析结果：缺参数就提示用户，识别完成就生成待预览的计划 */
-    private fun handleImportResult(conversationId: Long, result: ScheduleImport) {
+    private suspend fun handleImportResult(conversationId: Long, result: ScheduleImport) {
         if (result.needsMoreInfo) {
             val names = result.missing.joinToString("、") { param ->
                 when (param) {
@@ -216,11 +220,16 @@ class ChatViewModel(
             append("\n共生成 ${events.size} 个课程事件（仅保留今天之后的课程）")
         }
 
+        val managed = runCatching {
+            val (semester, courses) = managedScheduleImport(result, conversationId, currentConversationName())
+            LearningRepository(AppDatabase.getInstance(appContext)).preview(semester, courses)
+        }.getOrElse { _error.value = it.message ?: "无法保存课表规则，请补充节次"; return }
         val draft = PlanDraft(
             conversationId = conversationId,
-            plan = StudyPlan(events = events, summary = summary),
+            plan = StudyPlan(events = managed.generated, summary = summary + "\n保存学期与原始周次规则；将更新关联旧课程 ${managed.removed.size} 次，跳过重复 ${managed.duplicates} 次。时间冲突 ${managed.conflicts.size} 处：\n" + managed.conflicts.joinToString("\n") + "\n" + managed.courses.joinToString("\n") { "${it.name} 周${it.day} ${it.weeks}周 ${it.periods}节" }),
             name = currentConversationName(),
-            replaceExisting = true
+            replaceExisting = true,
+            coursePreview = managed
         )
         _pendingPlan.value = draft
         _latestPlan.value = draft
@@ -253,7 +262,12 @@ class ChatViewModel(
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
         val current = _pendingPlan.value ?: return
-        val updated = current.copy(name = trimmed)
+        val coursePreview = current.coursePreview?.let { preview ->
+            preview.copy(semester = preview.semester.copy(name = trimmed), courses = preview.courses.map { it.copy(source = trimmed) },
+                generated = preview.generated.map { it.copy(planName = trimmed) })
+        }
+        val updated = current.copy(name = trimmed, coursePreview = coursePreview,
+            plan = if (coursePreview == null) current.plan else current.plan.copy(events = coursePreview.generated))
         _pendingPlan.value = updated
         if (_latestPlan.value?.plan == current.plan) _latestPlan.value = updated
     }
@@ -266,6 +280,12 @@ class ChatViewModel(
         }
 
         viewModelScope.launch {
+            draft.coursePreview?.let { preview ->
+                runCatching { LearningRepository(AppDatabase.getInstance(appContext)).apply(preview) }
+                    .onSuccess { _notice.value = "课表与重复课程规则已保存"; _latestPlan.value = draft.copy(applied = true); _pendingPlan.value = null }
+                    .onFailure { _error.value = it.message ?: "应用失败，请重新预览" }
+                return@launch
+            }
             repository.applyPlan(draft.plan, draft.name, draft.replaceExisting)
                 .onSuccess { count ->
                     _notice.value = "已应用 $count 个事件到日历"

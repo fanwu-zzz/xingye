@@ -7,114 +7,83 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.fanwu.studyplanner.data.local.AppDatabase
 import com.fanwu.studyplanner.data.repository.CalendarRepository
-import com.fanwu.studyplanner.domain.CalendarEvent
-import com.fanwu.studyplanner.domain.EventType
-import com.fanwu.studyplanner.domain.durationMinutes
-import com.fanwu.studyplanner.domain.formatHours
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.stateIn
+import com.fanwu.studyplanner.data.repository.FocusRepository
+import com.fanwu.studyplanner.domain.*
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import java.time.DayOfWeek
 import java.time.LocalDate
 
-/** 统计页里的一个计划组：一轮对话生成的整组计划 */
-data class PlanGroup(
-    /** 计划组名（对话名），null 表示手动创建、未分组的事件 */
-    val planName: String?,
-    val count: Int,
-    /** 组内最近的截止日期，用于展示 */
-    val nearestDeadline: String
-)
+data class PlanGroup(val planName: String?, val count: Int, val nearestDeadline: String)
 
-/** 统计页展示用的汇总数据 */
 data class StatsUiState(
-    val pendingCount: Int = 0,
-    /** 待完成任务按计划组打包，按最近截止时间排序 */
-    val groups: List<PlanGroup> = emptyList(),
-    val weekHoursText: String = "0h",
-    val completionText: String = "--",
-    val streakDays: Int = 0,
-    /** 周一~周日每天的学习分钟数 */
-    val dailyMinutes: List<Int> = List(7) { 0 }
+    val pendingCount: Int = 0, val groups: List<PlanGroup> = emptyList(),
+    val weekHoursText: String = "0h", val completedHoursText: String = "0h",
+    val completionText: String = "--", val streakDays: Int = 0,
+    val dailyMinutes: List<Int> = List(7) { 0 }, val dayLabels: List<String> = emptyList(),
+    val periodLabel: String = "", val completedCount: Int = 0, val plannedCount: Int = 0,
+    val actualFocusMs: Long = 0, val dailyFocusMs: List<Long> = emptyList()
 )
 
-class StatsViewModel(private val repository: CalendarRepository) : ViewModel() {
+/** 计划来自日历，实际专注只来自专注服务持久化的有效时间片。 */
+class StatsViewModel(private val repository: CalendarRepository, focus: FocusRepository) : ViewModel() {
+    private val _period = MutableStateFlow("week")
+    val period: StateFlow<String> = _period
+    fun selectPeriod(period: String) { _period.value = period }
 
-    private val today: LocalDate = LocalDate.now()
-    private val weekStart: LocalDate = today.with(DayOfWeek.MONDAY)
-    private val weekEnd: LocalDate = weekStart.plusDays(6)
+    private val currentDay = flow {
+        while (true) { emit(LocalDate.now()); delay(30_000) }
+    }.distinctUntilChanged()
+    val uiState = combine(repository.observeAllTasks(), focus.intervals, _period, currentDay) { tasks, spans, period, today ->
+        buildStatsState(tasks, today, period, spans)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), StatsUiState())
 
-    private val pending = repository.observePending(today.toString())
-    private val weekEvents =
-        repository.observeBetween(weekStart.toString(), weekEnd.toString())
-
-    // 近 60 天事件用于计算“连续学习”天数
-    private val recentEvents =
-        repository.observeBetween(today.minusDays(60).toString(), today.toString())
-
-    val uiState: StateFlow<StatsUiState> =
-        combine(pending, weekEvents, recentEvents) { pendingList, week, recent ->
-            // 课表只用于日历展示，不计入学习时长、完成率与连续天数
-            val studyWeek = week.filter { it.type != EventType.CLASS }
-            val studyRecent = recent.filter { it.type != EventType.CLASS }
-            StatsUiState(
-                pendingCount = pendingList.size,
-                groups = groupPending(pendingList),
-                weekHoursText = formatHours(studyWeek.sumOf { it.durationMinutes() }),
-                completionText = formatCompletion(studyWeek),
-                streakDays = computeStreak(studyRecent),
-                dailyMinutes = (0..6).map { offset ->
-                    val date = weekStart.plusDays(offset.toLong()).toString()
-                    studyWeek.filter { it.date == date }.sumOf { it.durationMinutes() }
-                }
-            )
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), StatsUiState())
-
-    /** 删除整个计划组，日历上对应日期的日程一并删除 */
     fun deletePlan(planName: String) {
         viewModelScope.launch { repository.deletePlan(planName) }
     }
 
     companion object {
-        /** 按 planName 打包，组间按最近截止时间排序 */
         internal fun groupPending(events: List<CalendarEvent>): List<PlanGroup> =
-            events.groupBy { it.planName }
-                .map { (name, list) ->
-                    PlanGroup(
-                        planName = name,
-                        count = list.size,
-                        nearestDeadline = list.minOf { it.date }
-                    )
-                }
+            events.groupBy { it.planName }.map { (name, list) -> PlanGroup(name, list.size, list.minOf { it.date }) }
                 .sortedBy { it.nearestDeadline }
 
-        internal fun formatCompletion(week: List<CalendarEvent>): String {
-            if (week.isEmpty()) return "--"
-            val done = week.count { it.isDone }
-            return "${done * 100 / week.size}%"
-        }
+        internal fun formatCompletion(events: List<CalendarEvent>): String =
+            if (events.isEmpty()) "--" else "${events.count { it.isDone } * 100 / events.size}%"
 
-        /** 从今天（或昨天）往前数，连续有安排的天数 */
-        internal fun computeStreak(recent: List<CalendarEvent>): Int {
-            val daysWithEvents = recent.map { it.date }.toSet()
-            var day = LocalDate.now()
-            if (day.toString() !in daysWithEvents) day = day.minusDays(1)
-            var streak = 0
-            while (day.toString() in daysWithEvents) {
-                streak++
-                day = day.minusDays(1)
-            }
-            return streak
+        internal fun computeStreak(events: List<CalendarEvent>, today: LocalDate = LocalDate.now()): Int {
+            val dates = events.filter { it.isDone }.map { it.date }.toSet()
+            var day = if (today.toString() in dates) today else today.minusDays(1)
+            var count = 0
+            while (day.toString() in dates) { count++; day = day.minusDays(1) }
+            return count
         }
 
         fun factory(context: Context) = viewModelFactory {
-            val appContext = context.applicationContext
-            initializer {
-                val dao = AppDatabase.getInstance(appContext).calendarEventDao()
-                StatsViewModel(CalendarRepository(dao))
-            }
+            initializer { StatsViewModel(CalendarRepository(AppDatabase.getInstance(context.applicationContext).calendarEventDao(), AppDatabase.getInstance(context.applicationContext)), FocusRepository.get(context)) }
         }
     }
+}
+
+internal fun buildStatsState(tasks: List<CalendarEvent>, today: LocalDate, period: String, spans: List<FocusSpan> = emptyList()): StatsUiState {
+    val start = if (period == "month") today.withDayOfMonth(1) else today.with(DayOfWeek.MONDAY)
+    val end = if (period == "month") start.plusMonths(1).minusDays(1) else start.plusDays(6)
+    val study = tasks.filter { it.type != EventType.CLASS }
+    val selected = study.filter { it.date >= start.toString() && it.date <= end.toString() }
+    val days = java.time.temporal.ChronoUnit.DAYS.between(start, end).toInt() + 1
+    val pending = study.filter { !it.isDone }
+    val actualByDay = focusByDate(spans)
+    val dailyFocus = (0 until days).map { actualByDay[start.plusDays(it.toLong())] ?: 0L }
+    return StatsUiState(
+        pendingCount = pending.size, groups = StatsViewModel.groupPending(pending),
+        weekHoursText = formatHours(selected.sumOf { it.durationMinutes() }),
+        completedHoursText = formatHours(selected.filter { it.isDone }.sumOf { it.durationMinutes() }),
+        completionText = StatsViewModel.formatCompletion(selected),
+        streakDays = StatsViewModel.computeStreak(study, today),
+        dailyMinutes = (0 until days).map { offset -> selected.filter { it.date == start.plusDays(offset.toLong()).toString() }.sumOf { it.durationMinutes() } },
+        dayLabels = (0 until days).map { offset -> if (period == "month") start.plusDays(offset.toLong()).dayOfMonth.toString() else listOf("一", "二", "三", "四", "五", "六", "日")[offset] },
+        periodLabel = "${start.monthValue}/${start.dayOfMonth} — ${end.monthValue}/${end.dayOfMonth}",
+        completedCount = selected.count { it.isDone }, plannedCount = selected.size,
+        actualFocusMs = dailyFocus.sum(), dailyFocusMs = dailyFocus
+    )
 }

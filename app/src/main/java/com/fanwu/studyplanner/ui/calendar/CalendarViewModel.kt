@@ -108,7 +108,7 @@ class CalendarViewModel(private val repository: CalendarRepository) : ViewModel(
             val appContext = context.applicationContext
             initializer {
                 val dao = AppDatabase.getInstance(appContext).calendarEventDao()
-                CalendarViewModel(CalendarRepository(dao))
+                CalendarViewModel(CalendarRepository(dao, AppDatabase.getInstance(appContext)))
             }
         }
     }

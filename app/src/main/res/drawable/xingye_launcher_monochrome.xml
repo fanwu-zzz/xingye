@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- 单色主题图标保留星星、眼睛、翻开的书页与书签。 -->
+    <path android:fillColor="#FFFFFFFF" android:fillType="evenOdd"
+        android:pathData="M54,22 L62,38 L78,43 L63,50 L56,64 L47,51 L32,43 L47,38 Z M47,42 a2,3 0,1 0,4 0 a2,3 0,1 0,-4 0 Z M59,42 a2,3 0,1 0,4 0 a2,3 0,1 0,-4 0 Z" />
+    <path android:fillColor="#FFFFFFFF" android:fillType="evenOdd"
+        android:pathData="M20,48 Q38,48 54,64 Q70,48 88,48 L83,70 Q66,70 54,81 Q42,70 25,70 Z M26,54 Q39,55 51,67 L51,72 Q38,62 28,61 Z M82,54 Q69,55 57,67 L57,72 Q70,62 80,61 Z M58,76 Q65,76 68,82 L73,87 L65,85 L66,91 Q59,87 58,76 Z" />
+</vector>

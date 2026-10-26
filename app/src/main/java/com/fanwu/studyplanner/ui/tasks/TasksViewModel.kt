@@ -16,6 +16,19 @@ import java.time.LocalDate
 
 class TasksViewModel(private val repository: CalendarRepository) : ViewModel() {
 
+    val allTasks: StateFlow<List<CalendarEvent>> = repository.observeAllTasks()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun saveEvent(event: CalendarEvent) {
+        viewModelScope.launch {
+            if (event.id == 0L) repository.insert(event) else repository.update(event)
+        }
+    }
+
+    fun deleteEvent(event: CalendarEvent) {
+        viewModelScope.launch { repository.delete(event) }
+    }
+
     /** 未完成任务，已按截止时间升序 */
     val pendingTasks: StateFlow<List<CalendarEvent>> =
         repository.observePending(LocalDate.now().toString())
@@ -30,7 +43,7 @@ class TasksViewModel(private val repository: CalendarRepository) : ViewModel() {
             val appContext = context.applicationContext
             initializer {
                 val dao = AppDatabase.getInstance(appContext).calendarEventDao()
-                TasksViewModel(CalendarRepository(dao))
+                TasksViewModel(CalendarRepository(dao, AppDatabase.getInstance(appContext)))
             }
         }
     }

@@ -118,9 +118,9 @@ object ScheduleExpander {
             if (range != null) {
                 val from = range.groupValues[1].toInt()
                 val to = range.groupValues[2].toInt()
-                if (from in 1..13 && to in 1..13 && from <= to) result += (from..to)
+                if (from in 1..24 && to in 1..24 && from <= to) result += (from..to)
             } else {
-                token.toIntOrNull()?.takeIf { it in 1..13 }?.let { result += it }
+                token.toIntOrNull()?.takeIf { it in 1..24 }?.let { result += it }
             }
         }
         return result.distinct().sorted()

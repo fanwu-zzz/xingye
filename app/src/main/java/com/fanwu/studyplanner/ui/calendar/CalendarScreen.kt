@@ -1,1163 +1,196 @@
 package com.fanwu.studyplanner.ui.calendar
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.FlingBehavior
-import androidx.compose.foundation.gestures.ScrollScope
-import androidx.compose.foundation.gestures.ScrollableDefaults
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.*
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberSwipeToDismissBoxState
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.fanwu.studyplanner.domain.CalendarEvent
-import com.fanwu.studyplanner.domain.EventType
-import kotlinx.coroutines.launch
-import com.fanwu.studyplanner.domain.durationMinutes
-import com.fanwu.studyplanner.domain.formatHours
-import com.fanwu.studyplanner.ui.theme.ApricotOrange
-import com.fanwu.studyplanner.ui.theme.CreamBackground
-import com.fanwu.studyplanner.ui.theme.DarkBar
-import com.fanwu.studyplanner.ui.theme.OrangePrimary
+import com.fanwu.studyplanner.domain.*
+import com.fanwu.studyplanner.ui.components.*
+import com.fanwu.studyplanner.ui.theme.*
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.temporal.ChronoUnit
-import java.time.temporal.IsoFields
 
-/** 日期条上的星期文字（两个字），序号从周一开始 */
-private val WEEKDAY_LABELS = listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")
-
-/** 日历面板表头用的单字星期 */
-private val WEEKDAY_SHORT_LABELS = listOf("一", "二", "三", "四", "五", "六", "日")
-
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun CalendarScreen(
-    onOpenChat: () -> Unit = {},
-    onOpenStats: () -> Unit = {},
-    viewModel: CalendarViewModel = viewModel(
-        factory = CalendarViewModel.factory(LocalContext.current)
-    )
+    onOpenChat: () -> Unit = {}, onOpenStats: () -> Unit = {},
+    onOpenTasks: () -> Unit = {}, onOpenSchedule: () -> Unit = {}, onOpenFocus: () -> Unit = {},
+    viewModel: CalendarViewModel = viewModel(factory = CalendarViewModel.factory(LocalContext.current))
 ) {
+    val date by viewModel.selectedDate.collectAsStateWithLifecycle()
     val month by viewModel.month.collectAsStateWithLifecycle()
-    val selectedDate by viewModel.selectedDate.collectAsStateWithLifecycle()
-    val weekEvents by viewModel.weekEvents.collectAsStateWithLifecycle()
-    val dayEvents by viewModel.selectedDayEvents.collectAsStateWithLifecycle()
+    val events by viewModel.selectedDayEvents.collectAsStateWithLifecycle()
+    val monthEvents by viewModel.monthEvents.collectAsStateWithLifecycle()
+    val week by viewModel.weekEvents.collectAsStateWithLifecycle()
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    var editor by remember { mutableStateOf(false) }
+    var selected by remember { mutableStateOf<CalendarEvent?>(null) }
+    var deleting by remember { mutableStateOf<CalendarEvent?>(null) }
+    val today = LocalDate.now()
+    val studyEvents = events.filter { it.type != EventType.CLASS }
+    val completed = studyEvents.count { it.isDone }
+    val progress = if (studyEvents.isEmpty()) 0f else completed.toFloat() / studyEvents.size
 
-    val today = remember { LocalDate.now() }
-    val dayListState = rememberLazyListState(initialFirstVisibleItemIndex = DAY_SCROLL_BASE)
-    val scope = rememberCoroutineScope()
-
-    var calendarExpanded by remember { mutableStateOf(false) }
-    var showEditor by remember { mutableStateOf(false) }
-    var editingEvent by remember { mutableStateOf<CalendarEvent?>(null) }
-    var pendingDelete by remember { mutableStateOf<CalendarEvent?>(null) }
-
-    Scaffold(
-        containerColor = CreamBackground,
-        floatingActionButton = {
-            // 日历展开时隐藏，避免浮在暗色遮罩上
-            if (!calendarExpanded) {
-                FloatingActionButton(
-                    onClick = {
-                        editingEvent = null
-                        showEditor = true
-                    },
-                    containerColor = OrangePrimary,
-                    contentColor = Color.White
-                ) {
-                    Text("+", style = MaterialTheme.typography.headlineMedium)
-                }
+    BrutalPage("学习日历", "${today.year} 年 · 把目标变成今天的行动", actions = {
+        BrutalIconButton(Icons.Outlined.CalendarMonth, "展开月历", { expanded = !expanded })
+    }) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("${date.monthValue} 月 ${date.dayOfMonth} 日", style = MaterialTheme.typography.headlineSmall)
+                Text("星期${WEEK_LABELS[date.dayOfWeek.value - 1]} · ${if (date == today) "今天" else date.year}", style = MaterialTheme.typography.bodySmall, color = BrutalMutedText)
             }
+            TextButton({ viewModel.selectDate(today) }) { Text("回到今天", color = BrutalBlack) }
         }
-    ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 20.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(top = 4.dp, bottom = 96.dp)
-            ) {
-                item(key = "home-header") {
-                    HomeHeader(
-                        month = month,
-                        onOpenCalendar = { calendarExpanded = true },
-                        onOpenChat = onOpenChat
-                    )
-                }
-
-                // 日期条吸顶固定，其余内容整体上下滚动
-                stickyHeader(key = "date-strip") {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(CreamBackground)
-                    ) {
-                        DateStrip(
-                            today = today,
-                            selectedDate = selectedDate,
-                            listState = dayListState,
-                            onSelect = viewModel::selectDate,
-                            onBackToToday = {
-                                viewModel.selectDate(today)
-                                scope.launch {
-                                    dayListState.animateScrollToItem(DAY_SCROLL_BASE)
-                                }
-                            }
-                        )
-                    }
-                }
-
-                item(key = "summary") {
-                    SummaryCard(
-                        dayEvents = dayEvents,
-                        weekEvents = weekEvents,
-                        onOpenStats = onOpenStats
-                    )
-                }
-
-                if (dayEvents.isEmpty()) {
-                    item(key = "empty") {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .fillParentMaxHeight(0.5f),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "这一天还没有安排，点右下角 + 添加",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                } else {
-                    val pendingEvents = dayEvents.filter { !it.isDone }
-                    val doneEvents = dayEvents.filter { it.isDone }
-
-                    items(pendingEvents, key = { "pending-${it.id}" }) { event ->
-                        SwipeableDayEventCard(
-                            event = event,
-                            onClick = {
-                                editingEvent = event
-                                showEditor = true
-                            },
-                            onLongClick = { pendingDelete = event },
-                            onComplete = { viewModel.setDone(event.id, true) }
-                        )
-                    }
-
-                    if (doneEvents.isNotEmpty()) {
-                        // 已完成任务放在最下方，与未完成任务隔开
-                        item(key = "done-header") {
-                            Column(modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)) {
-                                HorizontalDivider(
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f)
-                                )
-                                Text(
-                                    text = "已完成 ${doneEvents.size}",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(top = 12.dp)
-                                )
-                            }
-                        }
-                        items(doneEvents, key = { "done-${it.id}" }) { event ->
-                            DayEventCard(
-                                event = event,
-                                isDone = true,
-                                onClick = {
-                                    editingEvent = event
-                                    showEditor = true
-                                },
-                                onLongClick = { pendingDelete = event }
-                            )
-                        }
-                    }
-                }
-            }
-
-            // 遮罩：略暗色，点击收起；只覆盖内容区，不遮挡底部导航
-            AnimatedVisibility(
-                visible = calendarExpanded,
-                enter = fadeIn(),
-                exit = fadeOut()
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.28f))
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null
-                        ) { calendarExpanded = false }
-                )
-            }
-
-            // 日历面板：从顶部下拉展开，上滑收起
-            AnimatedVisibility(
-                visible = calendarExpanded,
-                enter = slideInVertically(initialOffsetY = { -it }),
-                exit = slideOutVertically(targetOffsetY = { -it })
-            ) {
-                CalendarDropSheet(
-                    today = today,
-                    selectedDate = selectedDate,
-                    onSelect = { date ->
-                        viewModel.selectDate(date)
-                        calendarExpanded = false
-                    }
-                )
-            }
-        }
-    }
-
-    if (showEditor) {
-        EventEditorDialog(
-            initialEvent = editingEvent,
-            defaultDate = selectedDate,
-            onDismiss = { showEditor = false },
-            onSave = { event ->
-                viewModel.saveEvent(event)
-                showEditor = false
-            }
-        )
-    }
-
-    pendingDelete?.let { event ->
-        AlertDialog(
-            onDismissRequest = { pendingDelete = null },
-            title = { Text("删除事件") },
-            text = { Text("确定删除「${event.title}」吗？") },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.deleteEvent(event)
-                    pendingDelete = null
-                }) { Text("删除", color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingDelete = null }) { Text("取消") }
-            }
-        )
-    }
-}
-
-/** 顶部：标题 + 月份 + 通知（暂作 AI 对话入口） */
-@Composable
-private fun HomeHeader(
-    month: YearMonth,
-    onOpenCalendar: () -> Unit,
-    onOpenChat: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 12.dp, bottom = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = "Study Planner",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            color = DarkBar,
-            modifier = Modifier.weight(1f)
-        )
-        Text(
-            text = "${month.monthValue}月",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        CalendarEntryButton(onClick = onOpenCalendar)
-        Spacer(modifier = Modifier.width(8.dp))
-        ChatEntryButton(onClick = onOpenChat)
-    }
-}
-
-/** 日历入口：与对话入口同款浅色方块，放在月份与对话图标之间 */
-@Composable
-private fun CalendarEntryButton(onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .size(40.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(ChatTileBackground)
-            .border(1.dp, ChatTileBorder, RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
-            .semantics { contentDescription = "打开日历" },
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            Icons.Default.CalendarMonth,
-            contentDescription = null,
-            tint = ChatIconTint,
-            modifier = Modifier.size(22.dp)
-        )
-    }
-}
-
-/** AI 对话入口：浅色圆角方块 + 线性对话气泡 */
-@Composable
-private fun ChatEntryButton(onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .size(44.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(ChatTileBackground)
-            .border(1.dp, ChatTileBorder, RoundedCornerShape(14.dp))
-            .clickable(onClick = onClick)
-            .semantics { contentDescription = "AI 对话" },
-        contentAlignment = Alignment.Center
-    ) {
-        ChatBubbleIcon(modifier = Modifier.size(24.dp), color = ChatIconTint)
-    }
-}
-
-/** 用 Canvas 画对话气泡：圆角矩形 + 左下小尾巴 + 两条内文线 */
-@Composable
-private fun ChatBubbleIcon(modifier: Modifier = Modifier, color: Color) {
-    Canvas(modifier = modifier) {
-        val unit = size.minDimension / 24f
-        val stroke = 1.6f * unit
-        val left = 2.5f * unit
-        val top = 4f * unit
-        val right = 21.5f * unit
-        val bottom = 18f * unit
-        val radius = 7f * unit
-
-        // 气泡轮廓：从尾巴尖起笔，绕一圈回到起点
-        val bubble = Path().apply {
-            moveTo(left + radius, top)
-            lineTo(right - radius, top)
-            arcTo(Rect(right - radius * 2, top, right, top + radius * 2), 270f, 90f, false)
-            lineTo(right, bottom - radius)
-            arcTo(Rect(right - radius * 2, bottom - radius * 2, right, bottom), 0f, 90f, false)
-            lineTo(13f * unit, bottom)
-            lineTo(8f * unit, 22.5f * unit)
-            lineTo(10.2f * unit, bottom)
-            lineTo(left + radius, bottom)
-            arcTo(Rect(left, bottom - radius * 2, left + radius * 2, bottom), 90f, 90f, false)
-            lineTo(left, top + radius)
-            arcTo(Rect(left, top, left + radius * 2, top + radius * 2), 180f, 90f, false)
-            close()
-        }
-        drawPath(
-            path = bubble,
-            color = color,
-            style = Stroke(width = stroke, cap = StrokeCap.Round, join = StrokeJoin.Round)
-        )
-
-        // 气泡内两条横线：上面一条略长
-        drawLine(
-            color = color,
-            start = Offset(7f * unit, 9.3f * unit),
-            end = Offset(16.5f * unit, 9.3f * unit),
-            strokeWidth = stroke,
-            cap = StrokeCap.Round
-        )
-        drawLine(
-            color = color,
-            start = Offset(7f * unit, 12.9f * unit),
-            end = Offset(13.5f * unit, 12.9f * unit),
-            strokeWidth = stroke,
-            cap = StrokeCap.Round
-        )
-    }
-}
-
-private val ChatTileBackground = Color(0xFFF8F6FD)
-private val ChatTileBorder = Color(0xFFECE9F6)
-private val ChatIconTint = Color(0xFF5B6478)
-
-/**
- * 日期条：白色胶囊容器，左右箭头各移动一天，中间按天横向滑动的日期。
- * 不在今天时，上方浮出「回到今天」按钮。
- */
-private const val DAY_SCROLL_BASE = 3_000
-
-@Composable
-private fun DateStrip(
-    today: LocalDate,
-    selectedDate: LocalDate,
-    listState: LazyListState,
-    onSelect: (LocalDate) -> Unit,
-    onBackToToday: () -> Unit
-) {
-    Column {
-        AnimatedVisibility(visible = selectedDate != today) {
-            Column {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(Color.White)
-                            .clickable(onClick = onBackToToday)
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            Icons.Default.Refresh,
-                            contentDescription = null,
-                            tint = OrangePrimary,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "回到今天",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = OrangePrimary
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(10.dp))
-            }
-        }
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(24.dp))
-                .background(Color.White)
-                .padding(6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            DayStepButton(
-                icon = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-                description = "前一天",
-                onClick = { onSelect(selectedDate.minusDays(1)) }
-            )
-            DayScroller(
-                today = today,
-                selectedDate = selectedDate,
-                listState = listState,
-                onSelect = onSelect,
-                modifier = Modifier.weight(1f)
-            )
-            DayStepButton(
-                icon = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                description = "后一天",
-                onClick = { onSelect(selectedDate.plusDays(1)) }
-            )
-        }
-    }
-}
-
-/** 日期条左右箭头：点击选中前/后一天 */
-@Composable
-private fun DayStepButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    description: String,
-    onClick: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .size(30.dp)
-            .clip(CircleShape)
-            .clickable(onClick = onClick)
-            .semantics { contentDescription = description },
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            tint = Color(0xFFB3AEA6),
-            modifier = Modifier.size(22.dp)
-        )
-    }
-}
-
-@Composable
-private fun DayScroller(
-    today: LocalDate,
-    selectedDate: LocalDate,
-    listState: LazyListState,
-    onSelect: (LocalDate) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    // 降低惯性速度，避免轻轻一划就飞出很远
-    val baseFling = ScrollableDefaults.flingBehavior()
-    val slowFling = remember(baseFling) { SlowFlingBehavior(baseFling, 0.45f) }
-
-    // 选中日期不在可见范围时（如从日历面板跳转），滚动到该日期
-    LaunchedEffect(selectedDate) {
-        val index = DAY_SCROLL_BASE + ChronoUnit.DAYS.between(today, selectedDate).toInt()
-        val visible = listState.layoutInfo.visibleItemsInfo.map { it.index }
-        if (index !in visible) listState.animateScrollToItem(index)
-    }
-
-    // 松手后吸附到最近的日期，避免停在半个格子的位置
-    LaunchedEffect(listState.isScrollInProgress) {
-        if (listState.isScrollInProgress) return@LaunchedEffect
-        val first = listState.layoutInfo.visibleItemsInfo.firstOrNull() ?: return@LaunchedEffect
-        val scrolled = -first.offset
-        when {
-            scrolled > first.size / 2 -> listState.animateScrollToItem(first.index + 1)
-            scrolled > 1 -> listState.animateScrollToItem(first.index)
-        }
-    }
-
-    LazyRow(
-        state = listState,
-        modifier = modifier,
-        flingBehavior = slowFling
-    ) {
-        items(count = 6_001) { offset ->
-            val date = today.plusDays((offset - DAY_SCROLL_BASE).toLong())
-            WeekDayCell(
-                date = date,
-                selected = date == selectedDate,
-                weekdayLabel = WEEKDAY_LABELS[date.dayOfWeek.value - 1],
-                onSelect = onSelect,
-                modifier = Modifier.width(52.dp)
-            )
-        }
-    }
-}
-
-/** 把默认惯性滚动速度按系数衰减，滑动灵敏度更温和 */
-private class SlowFlingBehavior(
-    private val delegate: FlingBehavior,
-    private val factor: Float
-) : FlingBehavior {
-    override suspend fun ScrollScope.performFling(initialVelocity: Float): Float =
-        with(delegate) { performFling(initialVelocity * factor) }
-}
-
-/** 单个日期：选中为浅橙底+橙色深字，未选中为浅灰字 */
-@Composable
-private fun WeekDayCell(
-    date: LocalDate,
-    selected: Boolean,
-    weekdayLabel: String,
-    onSelect: (LocalDate) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val isToday = date == LocalDate.now()
-    Column(
-        modifier = modifier
-            .padding(horizontal = 1.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(if (selected) ApricotOrange.copy(alpha = 0.5f) else Color.Transparent)
-            .clickable { onSelect(date) }
-            .padding(vertical = 8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = date.dayOfMonth.toString(),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = when {
-                selected -> OrangePrimary
-                isToday -> OrangePrimary
-                else -> Color(0xFFB3AEA6)
-            }
-        )
-        Text(
-            text = weekdayLabel,
-            style = MaterialTheme.typography.bodySmall,
-            color = when {
-                selected -> OrangePrimary.copy(alpha = 0.85f)
-                isToday -> OrangePrimary.copy(alpha = 0.7f)
-                else -> Color(0xFFC6C1B9)
-            }
-        )
-    }
-}
-
-/** 橙色 Summary 卡：当日计划/完成 + 本周总计 + 环形进度 + 各类型完成度 */
-@Composable
-private fun SummaryCard(
-    dayEvents: List<CalendarEvent>,
-    weekEvents: List<CalendarEvent>,
-    onOpenStats: () -> Unit
-) {
-    val plannedMinutes = dayEvents.sumOf { it.durationMinutes() }
-    val doneMinutes = dayEvents.filter { it.isDone }.sumOf { it.durationMinutes() }
-    val weekTotalMinutes = weekEvents.sumOf { it.durationMinutes() }
-    val progress = if (plannedMinutes > 0) {
-        (doneMinutes.toFloat() / plannedMinutes).coerceIn(0f, 1f)
-    } else {
-        0f
-    }
-
-    Card(
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = ApricotOrange),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "Summary",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = DarkBar,
-                    modifier = Modifier.weight(1f)
-                )
-                Text(
-                    text = "Details ›",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = DarkBar.copy(alpha = 0.6f),
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable(onClick = onOpenStats)
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    SummaryMetric("计划", formatHours(plannedMinutes))
-                    SummaryMetric("已完成", formatHours(doneMinutes))
-                    SummaryMetric("本周总计", formatHours(weekTotalMinutes))
-                }
-                ProgressDonut(progress = progress)
-            }
-
-            val typeProgress = weekEvents
-                .groupBy { it.type }
-                .map { (type, events) -> Triple(type, events.count { it.isDone }, events.size) }
-                .sortedByDescending { it.third }
-                .take(3)
-
-            if (typeProgress.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(16.dp))
-                typeProgress.forEachIndexed { index, (type, done, total) ->
-                    TypeProgressRow(
-                        label = type.label(),
-                        done = done,
-                        total = total,
-                        color = when (index) {
-                            0 -> DarkBar
-                            1 -> OrangePrimary
-                            else -> Color(0xFFA8D5BA)
-                        }
-                    )
-                    if (index < typeProgress.lastIndex) Spacer(modifier = Modifier.height(8.dp))
-                }
-            }
-        }
-    }
-}
-
-/** 白色小药丸（标签+数值）+ 右侧大数字 */
-@Composable
-private fun SummaryMetric(label: String, value: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Column(
-            modifier = Modifier
-                .clip(RoundedCornerShape(10.dp))
-                .background(Color.White.copy(alpha = 0.7f))
-                .padding(horizontal = 10.dp, vertical = 4.dp)
-        ) {
-            Text(label, style = MaterialTheme.typography.labelSmall, color = DarkBar)
-            Text(
-                value,
-                style = MaterialTheme.typography.labelSmall,
-                color = DarkBar.copy(alpha = 0.6f)
-            )
-        }
-        Spacer(modifier = Modifier.width(10.dp))
-        Text(
-            text = value,
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-            color = DarkBar
-        )
-    }
-}
-
-@Composable
-private fun ProgressDonut(progress: Float) {
-    Box(modifier = Modifier.size(110.dp), contentAlignment = Alignment.Center) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val strokeWidth = 12.dp.toPx()
-            val arcSize = Size(size.width - strokeWidth, size.height - strokeWidth)
-            val topLeft = Offset(strokeWidth / 2, strokeWidth / 2)
-            drawArc(
-                color = Color.White.copy(alpha = 0.45f),
-                startAngle = 0f,
-                sweepAngle = 360f,
-                useCenter = false,
-                topLeft = topLeft,
-                size = arcSize,
-                style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-            )
-            drawArc(
-                color = DarkBar,
-                startAngle = -90f,
-                sweepAngle = 360f * progress,
-                useCenter = false,
-                topLeft = topLeft,
-                size = arcSize,
-                style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-            )
-        }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = "${(progress * 100).toInt()}%",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = DarkBar
-            )
-            Text(
-                text = "progress",
-                style = MaterialTheme.typography.bodySmall,
-                color = DarkBar.copy(alpha = 0.6f)
-            )
-        }
-    }
-}
-
-@Composable
-private fun TypeProgressRow(label: String, done: Int, total: Int, color: Color) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = DarkBar,
-            modifier = Modifier.width(56.dp)
-        )
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .height(8.dp)
-                .clip(RoundedCornerShape(4.dp))
-                .background(Color.White.copy(alpha = 0.55f))
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .fillMaxWidth(if (total > 0) done.toFloat() / total else 0f)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(color)
-            )
-        }
-        Text(
-            text = "$done/$total",
-            style = MaterialTheme.typography.bodySmall,
-            color = DarkBar.copy(alpha = 0.7f),
-            textAlign = TextAlign.End,
-            modifier = Modifier.width(40.dp)
-        )
-    }
-}
-
-/** 当日任务卡：色块图标 + 标题 + 时长 + 箭头；点击编辑，长按删除 */
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun SwipeableDayEventCard(
-    event: CalendarEvent,
-    onClick: () -> Unit,
-    onLongClick: () -> Unit,
-    onComplete: () -> Unit
-) {
-    val dismissState = rememberSwipeToDismissBoxState(
-        confirmValueChange = { value ->
-            // 左滑直接标记完成，不作二次确认
-            if (value == SwipeToDismissBoxValue.EndToStart) onComplete()
-            value == SwipeToDismissBoxValue.EndToStart
-        }
-    )
-
-    SwipeToDismissBox(
-        state = dismissState,
-        enableDismissFromStartToEnd = false,
-        backgroundContent = {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(OrangePrimary)
-                    .padding(horizontal = 20.dp),
-                contentAlignment = Alignment.CenterEnd
-            ) {
+        DayStrip(date, viewModel::selectDate)
+        if (expanded) {
+            BrutalPanel(padding = 12.dp) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Default.Check,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "已完成",
-                        color = Color.White,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
+                    BrutalIconButton(Icons.Outlined.ChevronLeft, "上个月", viewModel::previousMonth)
+                    Text("${month.year} 年 ${month.monthValue} 月", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                    BrutalIconButton(Icons.Outlined.ChevronRight, "下个月", viewModel::nextMonth)
                 }
-            }
-        }
-    ) {
-        DayEventCard(event = event, onClick = onClick, onLongClick = onLongClick)
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun DayEventCard(
-    event: CalendarEvent,
-    onClick: () -> Unit,
-    onLongClick: () -> Unit,
-    isDone: Boolean = false
-) {
-    Card(
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isDone) Color(0xFFF4F2ED) else Color.White
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isDone) 0.dp else 2.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-    ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(eventTypeColor(event.type).copy(alpha = if (isDone) 0.15f else 0.25f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = event.type.label().take(1),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = eventTypeColor(event.type).copy(alpha = if (isDone) 0.55f else 1f)
-                )
-            }
-            Spacer(modifier = Modifier.width(14.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = event.title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (isDone) MaterialTheme.colorScheme.onSurfaceVariant else DarkBar,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = "${event.durationMinutes()} 分钟 · ${event.startTime}-${event.endTime}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            if (isDone) {
-                Icon(
-                    Icons.Default.Check,
-                    contentDescription = "已完成",
-                    tint = OrangePrimary,
-                    modifier = Modifier.size(20.dp)
-                )
-            } else {
-                Icon(
-                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                    contentDescription = "编辑",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
-}
-
-/** 未选中日期文字色（浅灰） */
-private val CalendarDateGray = Color(0xFF9E9990)
-
-/**
- * 下拉日历面板：像下拉通知栏一样从顶部展开，占内容区约 86%，
- * 底部露出略暗的背景，不覆盖底部导航；点击暗色区域收起。
- */
-@Composable
-private fun CalendarDropSheet(
-    today: LocalDate,
-    selectedDate: LocalDate,
-    onSelect: (LocalDate) -> Unit
-) {
-    val currentMonth = remember { YearMonth.from(today) }
-    val months = remember(currentMonth) {
-        (-18..18).map { currentMonth.plusMonths(it.toLong()) }
-    }
-    val initialIndex = remember(currentMonth, selectedDate) {
-        val offset = ChronoUnit.MONTHS.between(currentMonth, YearMonth.from(selectedDate)).toInt()
-        (18 + offset).coerceIn(0, months.lastIndex)
-    }
-    val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialIndex)
-
-    Surface(
-        shape = RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp),
-        color = Color.White,
-        modifier = Modifier
-            .fillMaxWidth()
-            .fillMaxHeight(0.86f)
-    ) {
-        Column {
-            // 顶部拖动把手
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 10.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(width = 36.dp, height = 4.dp)
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(Color(0xFFDDD9D3))
-                )
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // 星期表头（左侧留出周数位置）
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-            ) {
-                Spacer(modifier = Modifier.width(28.dp))
-                WEEKDAY_SHORT_LABELS.forEach { label ->
-                    Text(
-                        text = label,
-                        modifier = Modifier.weight(1f),
-                        textAlign = TextAlign.Center,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFFB3AEA6)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            LazyColumn(state = listState, modifier = Modifier.weight(1f)) {
-                items(months) { m ->
-                    MonthSection(
-                        month = m,
-                        today = today,
-                        selectedDate = selectedDate,
-                        onSelect = onSelect
-                    )
-                }
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.End
-            ) {
-                Text(
-                    text = "今天",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = OrangePrimary,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable { onSelect(today) }
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
-                )
-            }
-        }
-    }
-}
-
-/** 一个月：标题 + 学期周次 + 每行左侧周号 + 日期格 */
-@Composable
-private fun MonthSection(
-    month: YearMonth,
-    today: LocalDate,
-    selectedDate: LocalDate,
-    onSelect: (LocalDate) -> Unit
-) {
-    val leading = month.atDay(1).dayOfWeek.value - 1 // 周一为每周第一天
-    val totalCells = ((leading + month.lengthOfMonth() + 6) / 7) * 7
-    val firstMonday = month.atDay(1).minusDays(leading.toLong())
-    val lastMonday = firstMonday.plusDays((totalCells - 7).toLong())
-    val weekRange = "第 ${firstMonday.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR)}-" +
-        "${lastMonday.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR)} 周"
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 20.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.Bottom
-        ) {
-            Text(
-                text = "${month.monthValue}月",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = DarkBar
-            )
-            Spacer(modifier = Modifier.width(10.dp))
-            Text(
-                text = weekRange,
-                style = MaterialTheme.typography.bodySmall,
-                color = Color(0xFFB3AEA6),
-                modifier = Modifier.padding(bottom = 2.dp)
-            )
-        }
-
-        for (row in 0 until totalCells / 7) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 2.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = firstMonday.plusDays((row * 7).toLong())
-                        .get(IsoFields.WEEK_OF_WEEK_BASED_YEAR)
-                        .toString(),
-                    modifier = Modifier.width(28.dp),
-                    textAlign = TextAlign.Center,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color(0xFFCFCAC2)
-                )
-                for (col in 0 until 7) {
-                    val day = row * 7 + col - leading + 1
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(40.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (day in 1..month.lengthOfMonth()) {
-                            val date = month.atDay(day)
-                            SheetDayCell(
-                                date = date,
-                                selected = date == selectedDate,
-                                isToday = date == today,
-                                onClick = { onSelect(date) }
-                            )
+                BoxWithConstraints(Modifier.fillMaxWidth()) {
+                    val gridWidth = maxOf(maxWidth, 336.dp)
+                    Column(Modifier.horizontalScroll(rememberScrollState()).width(gridWidth)) {
+                        MonthGrid(month, date, monthEvents.map { it.date }.toSet()) {
+                            viewModel.selectDate(it); expanded = false
                         }
                     }
                 }
             }
         }
+        BrutalPanel(color = BrutalYellow, shadow = true) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(if (date == today) "今日作战板" else "当日作战板", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+                BrutalTag(if (studyEvents.isEmpty()) "等待安排" else "${completed}/${studyEvents.size} 已完成", BrutalWhite)
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                BrutalMetric(formatHours(studyEvents.sumOf { it.durationMinutes() }), "当日计划", Modifier.weight(1f))
+                BrutalMetric(formatHours(studyEvents.filter { it.isDone }.sumOf { it.durationMinutes() }), "已完成安排", Modifier.weight(1f))
+            }
+            Box(Modifier.fillMaxWidth().height(12.dp).background(BrutalWhite).border(2.dp, BrutalBlack)) {
+                Box(Modifier.fillMaxWidth(progress).fillMaxHeight().background(BrutalBlack))
+            }
+            Text("本周计划 ${formatHours(week.filter { it.type != EventType.CLASS }.sumOf { it.durationMinutes() })} · 课程不计入学习计划时长",
+                style = MaterialTheme.typography.bodySmall)
+        }
+        BrutalButton("和 AI 制定学习计划", onOpenChat, Modifier.fillMaxWidth(), icon = Icons.Outlined.AutoAwesome)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            BrutalChoice("全部任务", false, onOpenTasks, Modifier.weight(1f))
+            BrutalChoice("本周课表", false, onOpenSchedule, Modifier.weight(1f))
+            BrutalChoice("开始专注", false, onOpenFocus, Modifier.weight(1f))
+        }
+        BrutalSection("当日日程") {
+            TextButton({ selected = null; editor = true }) {
+                Icon(Icons.Outlined.Add, null, Modifier.size(18.dp), tint = BrutalBlack)
+                Text("添加", color = BrutalBlack)
+            }
+        }
+        if (events.isEmpty()) {
+            BrutalEmpty("给今天留一个小目标", "添加一项学习任务，或让 AI 把你的考试目标拆成每天的计划。", "添加第一项任务", { selected = null; editor = true })
+        } else {
+            events.sortedWith(compareBy<CalendarEvent> { it.isDone }.thenBy { it.startTime }).forEach { event ->
+                key(event.id) {
+                    SwipeEventRow(event, onOpen = { selected = event }, onToggle = { viewModel.setDone(event.id, !event.isDone) })
+                }
+            }
+            Text("点击查看详情 · 左滑切换完成状态", style = MaterialTheme.typography.bodySmall, color = BrutalMutedText)
+        }
+        BrutalLinkRow("查看学习趋势", "看看这周的安排、完成率和计划分组", onOpenStats, icon = Icons.Outlined.BarChart)
+    }
+
+    if (editor) EventEditorDialog(selected, date, { editor = false; selected = null }) {
+        viewModel.saveEvent(it); viewModel.selectDate(LocalDate.parse(it.date)); editor = false; selected = null
+    }
+    if (!editor) selected?.let { event ->
+        EventDetailDialog(event, { selected = null }, onEdit = { editor = true },
+            onDelete = { deleting = event; selected = null }, onToggle = { viewModel.setDone(event.id, !event.isDone); selected = null })
+    }
+    deleting?.let { event ->
+        BrutalConfirm("删除日程？", "「${event.title}」将从日历中删除。", "确认删除",
+            { viewModel.deleteEvent(event); deleting = null }, { deleting = null }, danger = true)
+    }
+}
+
+private val WEEK_LABELS = listOf("一", "二", "三", "四", "五", "六", "日")
+
+@Composable
+private fun DayStrip(selected: LocalDate, onSelect: (LocalDate) -> Unit) {
+    val today = remember { LocalDate.now() }
+    val center = 3000
+    val state = rememberLazyListState()
+    LaunchedEffect(selected) {
+        val index = (center + ChronoUnit.DAYS.between(today, selected).toInt()).coerceIn(0, 6000)
+        state.scrollToItem((index - 2).coerceAtLeast(0))
+    }
+    LazyRow(state = state, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(6001) { index ->
+            val day = today.plusDays((index - center).toLong())
+            Column(
+                Modifier.width(48.dp).background(if (selected == day) BrutalYellow else BrutalWhite)
+                    .border(2.dp, BrutalBlack).clickable { onSelect(day) }.padding(vertical = 10.dp),
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(if (day == today) "今" else WEEK_LABELS[day.dayOfWeek.value - 1], style = MaterialTheme.typography.labelMedium)
+                Text(day.dayOfMonth.toString(), style = MaterialTheme.typography.titleLarge, fontFamily = FontFamily.Monospace)
+            }
+        }
     }
 }
 
 @Composable
-private fun SheetDayCell(
-    date: LocalDate,
-    selected: Boolean,
-    isToday: Boolean,
-    onClick: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .size(34.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(if (selected) ApricotOrange.copy(alpha = 0.5f) else Color.Transparent)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = date.dayOfMonth.toString(),
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = if (selected || isToday) FontWeight.Bold else null,
-            color = when {
-                selected -> OrangePrimary
-                isToday -> OrangePrimary
-                else -> CalendarDateGray
+private fun MonthGrid(month: YearMonth, selected: LocalDate, eventDates: Set<String>, onSelect: (LocalDate) -> Unit) {
+    Row {
+        WEEK_LABELS.forEach { Text(it, Modifier.weight(1f).padding(vertical = 8.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center) }
+    }
+    val leading = month.atDay(1).dayOfWeek.value - 1
+    repeat((leading + month.lengthOfMonth() + 6) / 7) { row ->
+        Row(Modifier.fillMaxWidth()) {
+            repeat(7) { column ->
+                val number = row * 7 + column - leading + 1
+                if (number in 1..month.lengthOfMonth()) {
+                    val day = month.atDay(number)
+                    Column(
+                        Modifier.weight(1f).heightIn(min = 48.dp).background(if (day == selected) BrutalYellow else BrutalWhite)
+                            .clickable { onSelect(day) }.padding(vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(number.toString(), style = MaterialTheme.typography.titleSmall)
+                        Text(if (day.toString() in eventDates) "▪" else " ", style = MaterialTheme.typography.labelSmall)
+                    }
+                } else Spacer(Modifier.weight(1f))
             }
-        )
+        }
     }
 }
 
-/** 按事件类型区分颜色 */
-fun eventTypeColor(type: EventType): Color = when (type) {
-    EventType.EXAM -> Color(0xFFE57373)
-    EventType.CLASS -> Color(0xFF64B5F6)
-    EventType.STUDY_TASK -> Color(0xFF81C784)
+@Composable
+private fun SwipeEventRow(event: CalendarEvent, onOpen: () -> Unit, onToggle: () -> Unit) {
+    val state = rememberSwipeToDismissBoxState(confirmValueChange = {
+        if (it == SwipeToDismissBoxValue.EndToStart && event.type != EventType.CLASS) onToggle()
+        false
+    })
+    SwipeToDismissBox(state, enableDismissFromStartToEnd = false, enableDismissFromEndToStart = event.type != EventType.CLASS,
+        backgroundContent = {
+            Box(Modifier.fillMaxSize().background(BrutalLime).padding(16.dp), contentAlignment = Alignment.CenterEnd) {
+                Text(if (event.isDone) "恢复待办" else "标记完成", style = MaterialTheme.typography.labelLarge)
+            }
+        }
+    ) { EventRow(event, onOpen, onToggle) }
+}
+
+fun eventTypeColor(type: EventType) = when (type) {
+    EventType.EXAM -> BrutalOrange
+    EventType.CLASS -> BrutalCyan
+    EventType.STUDY_TASK -> BrutalLime
 }

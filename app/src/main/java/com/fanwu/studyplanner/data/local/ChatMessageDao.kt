@@ -7,6 +7,8 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface ChatMessageDao {
+    @Query("SELECT * FROM chat_messages ORDER BY id")
+    suspend fun all(): List<ChatMessageEntity>
 
     /** 按时间顺序观察某轮对话的消息 */
     @Query("SELECT * FROM chat_messages WHERE conversationId = :conversationId ORDER BY timestamp ASC")

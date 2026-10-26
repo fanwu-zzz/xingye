@@ -1,3 +1,5 @@
 <resources>
-    <string name="app_name">StudyPlanner</string>
+    <string name="app_name">星页</string>
+    <string name="app_tagline">%1$s · 让计划真正发生</string>
+    <string name="calendar_reminder_public_title">%1$s 日程提醒</string>
 </resources>

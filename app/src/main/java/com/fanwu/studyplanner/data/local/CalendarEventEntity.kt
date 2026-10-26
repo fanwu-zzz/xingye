@@ -24,7 +24,11 @@ data class CalendarEventEntity(
     val note: String? = null,
     val isDone: Boolean = false,
     /** 所属计划组（即生成该计划的对话名），手动创建的事件为空 */
-    val planName: String? = null
+    val planName: String? = null,
+    val completedAt: Long? = null,
+    val subject: String? = null,
+    val recurringCourseId: String? = null,
+    val originalOccurrenceDate: String? = null
 )
 
 fun CalendarEventEntity.toDomain(): CalendarEvent = CalendarEvent(
@@ -36,7 +40,8 @@ fun CalendarEventEntity.toDomain(): CalendarEvent = CalendarEvent(
     type = type,
     note = note,
     isDone = isDone,
-    planName = planName
+    planName = planName, completedAt = completedAt, subject = subject,
+    recurringCourseId = recurringCourseId, originalOccurrenceDate = originalOccurrenceDate
 )
 
 fun CalendarEvent.toEntity(): CalendarEventEntity = CalendarEventEntity(
@@ -48,5 +53,6 @@ fun CalendarEvent.toEntity(): CalendarEventEntity = CalendarEventEntity(
     type = type,
     note = note,
     isDone = isDone,
-    planName = planName
+    planName = planName, completedAt = completedAt, subject = subject,
+    recurringCourseId = recurringCourseId, originalOccurrenceDate = originalOccurrenceDate
 )

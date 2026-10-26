@@ -1,6 +1,7 @@
 package com.fanwu.studyplanner.data.repository
 
 import com.fanwu.studyplanner.BuildConfig
+import com.fanwu.studyplanner.reminders.ReminderRuntime
 import com.fanwu.studyplanner.data.local.ApiKeyStore
 import com.fanwu.studyplanner.data.local.CalendarEventDao
 import com.fanwu.studyplanner.data.local.ChatMessageDao
@@ -207,14 +208,9 @@ class ChatRepository(
         replaceExisting: Boolean = false
     ): Result<Int> = try {
         val tag = groupName.trim().takeIf { it.isNotEmpty() }
-        if (replaceExisting && tag != null) {
-            calendarDao.deleteByPlanName(tag)
+        ReminderRuntime.calendarMutation {
+            calendarDao.applyEvents(plan.events.map { it.copy(planName = tag).toEntity() }, tag.takeIf { replaceExisting })
         }
-        calendarDao.insertAll(
-            plan.events.map { event ->
-                event.copy(planName = tag).toEntity()
-            }
-        )
         Result.success(plan.events.size)
     } catch (e: Exception) {
         Result.failure(IllegalStateException("写入日历失败：${e.message ?: "未知错误"}", e))
@@ -401,7 +397,7 @@ class ChatRepository(
          * 不换算日期、不生成日历事件，这两件事由本地代码完成。
          */
         const val IMPORT_SCHEDULE_PROMPT = """
-你是 StudyPlanner 的「课表导入助手」，只负责把课表表格识别成结构化课程段。
+你是星页的「课表导入助手」，只负责把课表表格识别成结构化课程段。
 你不负责换算日期，也不负责生成日历事件。
 
 # 一、输入格式

@@ -14,6 +14,8 @@ data class ConversationWithCount(
 
 @Dao
 interface ConversationDao {
+    @Query("SELECT * FROM conversations ORDER BY id")
+    suspend fun all(): List<ConversationEntity>
 
     /** 全部会话（最新的在前），附带消息数量 */
     @Query(

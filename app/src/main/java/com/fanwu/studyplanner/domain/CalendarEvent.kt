@@ -7,6 +7,7 @@ import java.time.LocalTime
 /**
  * 日历事件类型
  */
+@kotlinx.serialization.Serializable
 enum class EventType {
     EXAM,       // 考试
     CLASS,      // 课程
@@ -17,6 +18,7 @@ enum class EventType {
  * 日历事件（业务模型）
  * 日期统一使用 YYYY-MM-DD，时间统一使用 HH:mm，便于排序和按日期查询。
  */
+@kotlinx.serialization.Serializable
 data class CalendarEvent(
     val id: Long = 0,
     val title: String,
@@ -28,7 +30,11 @@ data class CalendarEvent(
     /** 是否已完成，用于统计页和任务页 */
     val isDone: Boolean = false,
     /** 所属计划组（生成该计划的对话名），null 表示手动创建、未分组 */
-    val planName: String? = null
+    val planName: String? = null,
+    val completedAt: Long? = null,
+    val subject: String? = null,
+    val recurringCourseId: String? = null,
+    val originalOccurrenceDate: String? = null
 )
 
 /** 事件时长（分钟），时间串非法时按 0 计 */
