@@ -12,7 +12,9 @@ import kotlinx.serialization.json.JsonObject
 data class ApiMessage(
     val role: String,
     val content: String? = null,
-    @SerialName("tool_calls") val toolCalls: List<ToolCall>? = null
+    @SerialName("tool_calls") val toolCalls: List<ToolCall>? = null,
+    @SerialName("tool_call_id") val toolCallId: String? = null,
+    @SerialName("reasoning_content") val reasoningContent: String? = null
 )
 
 @Serializable
@@ -48,7 +50,9 @@ data class ChatCompletionRequest(
     val tools: List<ToolDefinition>? = null,
     @SerialName("tool_choice") val toolChoice: String? = null,
     val stream: Boolean = false,
-    val temperature: Double = 0.7
+    val temperature: Double = 0.7,
+    val thinking: JsonObject? = null,
+    @SerialName("max_tokens") val maxTokens: Int? = null
 )
 
 @Serializable

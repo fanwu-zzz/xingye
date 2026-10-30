@@ -9,6 +9,8 @@ import com.fanwu.studyplanner.data.local.*
 import com.fanwu.studyplanner.data.repository.CalendarRepository
 import com.fanwu.studyplanner.domain.*
 import com.fanwu.studyplanner.ui.calendar.EventEditorDialog
+import com.fanwu.studyplanner.ui.calendar.label
+import com.fanwu.studyplanner.ui.calendar.eventTypeColor
 import com.fanwu.studyplanner.ui.components.*
 import com.fanwu.studyplanner.ui.theme.*
 import kotlinx.coroutines.launch
@@ -39,9 +41,9 @@ fun ReminderEventScreen(id: Long, onBack: () -> Unit) {
         else if (current == null) BrutalEmpty("日程已不存在", "它可能已经被删除或在重新导入时替换。", "返回日历", onBack)
         else {
             BrutalPanel {
-                BrutalTag(when (current.type) { EventType.CLASS -> "课程"; EventType.EXAM -> "考试"; else -> "学习任务" }, when (current.type) { EventType.CLASS -> BrutalCyan; EventType.EXAM -> BrutalOrange; else -> BrutalLime })
+                BrutalTag(current.type.label(), eventTypeColor(current.type))
                 Text(current.title, style = MaterialTheme.typography.headlineSmall)
-                Text("${current.date}\n${current.startTime} — ${current.endTime}")
+                Text("${current.date}\n${current.timeText()}")
                 if (current.isDone) Text("已完成", style = MaterialTheme.typography.titleMedium)
                 current.note?.takeIf { it.isNotBlank() }?.let { Text(it) }
                 if (current.type != EventType.CLASS) current.planName?.let { Text("所属计划：$it") }

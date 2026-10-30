@@ -37,6 +37,20 @@ class LearningFeaturesTest {
         assertEquals("09:40", expandCourse(course(), combined).first().endTime)
         assertTrue(runCatching { expandCourse(course().copy(periods = "1"), combined) }.isFailure)
     }
+    @Test fun consecutiveCombinedBlocksCanFormOneLongClass() {
+        val combined = semester.copy(periods = listOf(PeriodTime(1, "08:10", "09:50", 2), PeriodTime(3, "10:10", "11:50", 4)))
+        val event = expandCourse(course().copy(periods = "1-4"), combined).first()
+        assertEquals("08:10", event.startTime)
+        assertEquals("11:50", event.endTime)
+        assertEquals("08:10", expandCourse(course(), combined).first().startTime)
+    }
+    @Test fun partialCombinedBlockAsksForSpecificCourseTimes() {
+        val combined = semester.copy(periods = listOf(PeriodTime(1, "08:10", "09:50", 2), PeriodTime(3, "10:10", "11:50", 4)))
+        val failure = runCatching { expandCourse(course().copy(periods = "2-4"), combined) }.exceptionOrNull()
+        assertTrue(failure is IllegalArgumentException)
+        assertTrue(failure!!.message.orEmpty().contains("数学"))
+        assertTrue(failure.message.orEmpty().contains("第 2 节开始"))
+    }
     @Test fun invalidSemesterAndRulesFailWithoutSilentExpansion() {
         assertTrue(runCatching { semester.copy(startMonday = "2026-10-27").validate() }.isFailure)
         assertTrue(runCatching { semester.copy(periods = semester.periods + PeriodTime(3, "09:00", "10:00")).validate() }.isFailure)

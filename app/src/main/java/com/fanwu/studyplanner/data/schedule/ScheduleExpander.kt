@@ -132,6 +132,16 @@ object ScheduleExpander {
 
         parseRange(table["$first-$last"])?.let { return it }
 
+        // 连堂课程可以跨多个完整作息块，但不能推测块内某一节的时间。
+        val blocks = table.mapNotNull { (key, value) ->
+            val numbers = parsePeriods(key)
+            val time = parseRange(value)
+            if (numbers.isEmpty() || time == null) null else numbers to time
+        }
+        val blockStart = blocks.firstOrNull { it.first.first() == first }?.second?.first
+        val blockEnd = blocks.firstOrNull { it.first.last() == last }?.second?.second
+        if (blockStart != null && blockEnd != null && blockEnd > blockStart) return blockStart to blockEnd
+
         val start = parseRange(table[first.toString()])?.first ?: DEFAULT_START.getOrNull(first - 1)
             ?: return null
         val end = parseRange(table[last.toString()])?.second ?: DEFAULT_END.getOrNull(last - 1)

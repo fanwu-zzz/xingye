@@ -18,15 +18,18 @@ import com.fanwu.studyplanner.ui.calendar.EventEditorDialog
 import com.fanwu.studyplanner.ui.components.*
 import com.fanwu.studyplanner.ui.theme.*
 import java.time.LocalDate
+import java.time.LocalDateTime
+import kotlinx.coroutines.delay
 
-internal fun filterTasks(tasks: List<CalendarEvent>, status: String, query: String, type: EventType?, plan: String?, today: LocalDate): List<CalendarEvent> =
+internal fun filterTasks(tasks: List<CalendarEvent>, status: String, query: String, type: EventType?, plan: String?, today: LocalDate,
+                         now: LocalDateTime = today.atStartOfDay()): List<CalendarEvent> =
     tasks.filter { event ->
         (plan == null || event.planName == plan) && (type == null || event.type == type) &&
             (query.isBlank() || listOfNotNull(event.title, event.note, event.planName).any { it.contains(query.trim(), true) }) &&
             when (status) {
                 "待办" -> !event.isDone
                 "今天" -> event.date == today.toString() && !event.isDone
-                "逾期" -> event.date < today.toString() && !event.isDone
+                "逾期" -> event.isOverdue(now)
                 "已完成" -> event.isDone
                 else -> true
             }
@@ -42,8 +45,11 @@ fun TasksScreen(onBack: () -> Unit, planFilter: String? = null,
     var selected by remember { mutableStateOf<CalendarEvent?>(null) }
     var editor by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf<CalendarEvent?>(null) }
-    val today = LocalDate.now()
-    val filtered = remember(tasks, query, status, type, planFilter, today) { filterTasks(tasks, status, query, type, planFilter, today) }
+    val now by produceState(LocalDateTime.now()) {
+        while (true) { delay(30_000); value = LocalDateTime.now() }
+    }
+    val today = now.toLocalDate()
+    val filtered = remember(tasks, query, status, type, planFilter, now) { filterTasks(tasks, status, query, type, planFilter, today, now) }
     BrutalPage("任务中心", planFilter ?: "把下一步看清楚，把一件事做完", onBack,
         scrollable = false, modifier = Modifier.navigationBarsPadding(), actions = {
             BrutalIconButton(Icons.Outlined.Add, "添加任务", { selected = null; editor = true })
@@ -55,6 +61,7 @@ fun TasksScreen(onBack: () -> Unit, planFilter: String? = null,
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             BrutalChoice("全部类型", type == null, { type = null })
             BrutalChoice("学习任务", type == EventType.STUDY_TASK, { type = EventType.STUDY_TASK })
+            BrutalChoice("截止任务", type == EventType.DEADLINE, { type = EventType.DEADLINE })
             BrutalChoice("考试", type == EventType.EXAM, { type = EventType.EXAM })
         }
         Text("找到 ${filtered.size} 项 · 按日期与截止时间排序", style = MaterialTheme.typography.bodySmall, color = BrutalMutedText)

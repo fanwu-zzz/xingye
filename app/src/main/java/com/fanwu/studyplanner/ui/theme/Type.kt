@@ -12,6 +12,12 @@ private fun text(size: Int, height: Int, weight: FontWeight = FontWeight.Normal,
         fontWeight = weight, fontSize = size.sp, lineHeight = height.sp, letterSpacing = 0.sp
     )
 
+/** 七列课表总览的紧凑排版；完整内容由课程详情及按天列表承载。 */
+object TimetableTypography {
+    val courseName = text(12, 16, FontWeight.Bold)
+    val detail = text(10, 14, FontWeight.Medium, true)
+}
+
 val Typography = Typography(
     displayLarge = text(48, 56, FontWeight.Black, true),
     displayMedium = text(40, 48, FontWeight.Black, true),

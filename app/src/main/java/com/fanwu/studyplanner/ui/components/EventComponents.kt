@@ -34,8 +34,9 @@ fun EventRow(event: CalendarEvent, onOpen: () -> Unit, onToggle: () -> Unit) {
             }
             Text(event.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis,
                 textDecoration = if (event.isDone && event.type != EventType.CLASS) TextDecoration.LineThrough else null)
-            Text("${event.startTime} — ${event.endTime} · ${event.durationMinutes()} 分钟",
+            Text(event.timeText() + if (event.type == EventType.DEADLINE) "" else " · ${event.durationMinutes()} 分钟",
                 style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
+            if (event.type == EventType.DEADLINE && event.isOverdue()) Text("已逾期", style = MaterialTheme.typography.bodySmall, color = BrutalDanger)
             // 保留用户已有改动：课程教室直接展示在卡片内，长教室名允许两行。
             if (event.type == EventType.CLASS && !event.note.isNullOrBlank()) {
                 Text(event.note, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis, color = BrutalMutedText)
@@ -59,7 +60,8 @@ fun EventDetailDialog(
     }) {
         BrutalTag(event.type.label(), eventTypeColor(event.type))
         Text(event.title, style = MaterialTheme.typography.headlineSmall)
-        Text("${event.date}\n${event.startTime} — ${event.endTime}", style = MaterialTheme.typography.bodyLarge, fontFamily = FontFamily.Monospace)
+        Text("${event.date}\n${event.timeText()}", style = MaterialTheme.typography.bodyLarge, fontFamily = FontFamily.Monospace)
+        if (event.type == EventType.DEADLINE) Text(if (event.isOverdue()) "已逾期，完成后可标记为完成。" else "在此时间前完成，不计入计划学习时长。", style = MaterialTheme.typography.bodySmall)
         if (event.type != EventType.CLASS) {
             event.planName?.let { Text("所属计划：$it") }
         }

@@ -3,10 +3,8 @@
 个人使用的 Android 学习计划 App：和 AI 聊天 → 生成学习计划 → 应用后写入日历 → 在统计/任务页跟踪完成情况。
 
 ## 工作方式（强制）
-- 收到任何需求后，先用自然语言向用户复述一遍：**要做什么、改哪里、不做什么、有无关键取舍**，然后停下等待用户确认
-- 用户明确确认（如「确认」「可以」「开始」）后才开始改代码、跑命令、生成文件
-- 用户提出修改或纠正复述时，按新理解重新复述并再次等待确认，不得直接开工
-- 复述要简短，一两句话讲清理解，不写方案文档、不提前贴大段代码
+- 每次收到需求，先按根目录 `AGENTS.md` 的「需求理解与修改范围」规则，用自己的语言简述理解、预期结果、修改范围及关键取舍，再开始修改。
+- 需求明确且已经获得授权时，说明后继续实施；用户补充或纠正时，先更新理解与范围再继续。
 
 ## 技术栈
 - Kotlin 2.0.21、Jetpack Compose（BOM 2024.09.00）、Material 3、Room 2.6.1（KSP）、Retrofit + kotlinx.serialization、DeepSeek API
@@ -27,9 +25,11 @@
 
 ## 关键结构
 - `MainActivity`：底部三 Tab（日历 `calendar` / 统计 `stats` / 我的 `profile`），子页 `subPage` 管理对话列表、聊天详情、任务页
-- `CalendarEventEntity`：`id, title, date(YYYY-MM-DD), startTime/endTime(HH:mm), type(EXAM/CLASS/STUDY_TASK), note, isDone, planName`
+- `CalendarEventEntity`：`id, title, date(YYYY-MM-DD), startTime/endTime(HH:mm), type(EXAM/CLASS/STUDY_TASK/DEADLINE), note, isDone, planName`；DEADLINE 是单个截止时刻，起止时间存同一值，时长为 0，不增加实体字段或改动表结构。
 - `planName` 标记事件属于哪个 AI 计划组，为 null 表示未分组；整组删除按 `planName` 删除
 - AI 计划流程：会话 → 生成计划 JSON → `PlanPanelDialog` 预览/改组名 → 应用时写入 `calendar_events` 并带 `planName`
+- 普通学习计划会话已接入 `data/agent/` 的第一版智能体：连续查询日历、待办、目标和专注摘要，工具校验草稿并反馈错误；`planner_documents` 保存最新运行和学习偏好。执行循环没有日历写入权限，预览确认后经事务校验快照与偏好并保存回执，防止重复写入。Excel 解析保留原路径，详见 `docs/AI_AGENT.md`。
+- beta.4 智能体可按需通过 DeepSeek Search/Fetch 联网，沿用 DeepSeek Key；学习偏好可关闭，工具结果保留真实来源，每轮联网最多6次且恢复不重置。网页内容不具备指令权限，不提供直接日历写入工具。
 - 统计页：待完成任务按计划分组（含逾期、可左滑整组删除）、周/月计划时长与完成率、每日计划图表（Compose 自绘，无图表库）；课程排除，实际专注时长只来自 F01 有效时间片
 - F01：专注轮次与暂停区间、有效时间片保存在 Room；状态推进统一经 FocusRepository 事务处理，使用单调时钟，不按 UI tick 累计时长；设备重启后保留最近检查点并暂停，见 `docs/F01_FOCUS.md`
 - F03：`ui/reminders` 为正式设置和通知日程详情，`reminders` 负责 Room 提醒凭据、单个最近 AlarmManager 闹钟、系统变更广播与 JobScheduler 补偿；日历写入统一经 ReminderRuntime.calendarMutation 重排，课表替换为事务，见 `docs/F03_REMINDERS.md`

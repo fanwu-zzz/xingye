@@ -193,4 +193,5 @@ fun eventTypeColor(type: EventType) = when (type) {
     EventType.EXAM -> BrutalOrange
     EventType.CLASS -> BrutalCyan
     EventType.STUDY_TASK -> BrutalLime
+    EventType.DEADLINE -> BrutalOrange
 }

@@ -61,7 +61,7 @@ fun ReminderScreen(onBack: () -> Unit, viewModel: ReminderViewModel = viewModel(
     fun openSettings(intent: Intent) {
         runCatching { context.startActivity(intent) }.onFailure { settingsError = "无法打开系统设置，请在系统应用管理中调整权限。" }
     }
-    BrutalPage("提醒与通知", "按日程开始时间，提前做好准备", onBack, modifier = Modifier.navigationBarsPadding().imePadding()) {
+    BrutalPage("提醒与通知", "在日程开始或任务截止前提醒", onBack, modifier = Modifier.navigationBarsPadding().imePadding()) {
         val saved = config
         if (saved == null) { Text("正在读取提醒设置…"); return@BrutalPage }
         var tasks by rememberSaveable(saved.tasksEnabled) { mutableStateOf(saved.tasksEnabled) }
@@ -87,10 +87,10 @@ fun ReminderScreen(onBack: () -> Unit, viewModel: ReminderViewModel = viewModel(
         }
         BrutalSection("提醒范围")
         BrutalPanel {
-            ReminderToggle("学习任务与考试", tasks) { tasks = it }
+            ReminderToggle("任务与考试提醒", tasks) { tasks = it }
             HorizontalDivider(color = BrutalBlack)
             ReminderToggle("课程开始提醒", courses) { courses = it }
-            Text("已完成日程不提醒。添加、改期、删除、整组删除和重新导入后自动更新。", style = MaterialTheme.typography.bodySmall)
+            Text("含学习任务、作业等截止任务与考试。截止任务按截止时刻提前提醒，其他日程按开始时刻。已完成日程不提醒。", style = MaterialTheme.typography.bodySmall)
         }
         BrutalSection("提前多久")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -98,7 +98,7 @@ fun ReminderScreen(onBack: () -> Unit, viewModel: ReminderViewModel = viewModel(
                 BrutalChoice("$minutes 分钟", lead.toIntOrNull() == minutes, { lead = minutes.toString() }, Modifier.weight(1f))
             }
         }
-        BrutalField(lead, { lead = it.filter(Char::isDigit).take(4) }, "提前分钟（0—1440，0 为开始时）", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+        BrutalField(lead, { lead = it.filter(Char::isDigit).take(4) }, "提前分钟（0—1440，0 为到点时）", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
         BrutalSection("静默时段")
         ReminderToggle("启用静默时段", quiet) { quiet = it }
         BrutalField(quietStart, { quietStart = it.take(5) }, "静默开始（HH:mm）")

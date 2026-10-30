@@ -22,7 +22,7 @@ object DeepSeekClient {
         encodeDefaults = true
     }
 
-    val api: DeepSeekApi by lazy {
+    private val retrofit: Retrofit by lazy {
         val client = OkHttpClient.Builder()
             .addInterceptor(
                 HttpLoggingInterceptor().apply {
@@ -38,6 +38,8 @@ object DeepSeekClient {
             .client(client)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
-            .create(DeepSeekApi::class.java)
     }
+
+    val api: DeepSeekApi by lazy { retrofit.create(DeepSeekApi::class.java) }
+    val webApi: DeepSeekWebApi by lazy { retrofit.create(DeepSeekWebApi::class.java) }
 }

@@ -41,7 +41,7 @@ class FocusRepository(
             check(dao.active() == null) { "已有一轮专注，请先结束当前专注或休息。" }
             val task = taskId?.let { id ->
                 val event = database.calendarEventDao().getById(id)?.toDomain()
-                check(event != null && event.type == EventType.STUDY_TASK && !event.isDone) { "关联任务不存在或已完成，请重新选择。" }
+                check(event != null && event.type.isTask && !event.isDone) { "关联任务不存在或已完成，请重新选择。" }
                 event
             }
             val session = FocusTimer.newSession(UUID.randomUUID().toString(), focusMinutes, breakMinutes, clock.now(), zoneId(), task)
@@ -63,7 +63,7 @@ class FocusRepository(
             if (completeTask && !state.taskCompletionApplied && taskId != null &&
                 (action == FocusAction.FINISH || action == FocusAction.START_BREAK)) {
                 val task = database.calendarEventDao().getById(taskId)
-                if (task?.type == EventType.STUDY_TASK) {
+                if (task != null && task.type.isTask) {
                     database.calendarEventDao().setDone(task.id, true, clock.now().wallMs)
                     state = state.copy(taskCompletionApplied = true)
                 }

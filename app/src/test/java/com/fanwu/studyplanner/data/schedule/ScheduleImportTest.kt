@@ -1,6 +1,8 @@
 package com.fanwu.studyplanner.data.schedule
 
 import com.fanwu.studyplanner.domain.CourseSegment
+import com.fanwu.studyplanner.domain.ScheduleImport
+import com.fanwu.studyplanner.domain.expandCourse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -106,6 +108,29 @@ class ScheduleImportTest {
     }
 
     // ---------- XlsxReader ----------
+
+    @Test fun `导入连堂课保留原始规则并使用完整作息块边界`() {
+        val value = ScheduleImport(semesterStartMonday = "2026-09-07",
+            periodTimeTable = mapOf("6-7" to "14:10-15:50", "8-9" to "16:10-17:50"),
+            courses = listOf(CourseSegment("操作系统", 1, "1-4,6-14", "6-9", "A101")))
+        val (semester, courses) = managedScheduleImport(value, 42, "测试课表", LocalDate.parse("2026-10-26"))
+        assertEquals("1-4,6-14", courses.single().weeks)
+        val events = expandCourse(courses.single(), semester)
+        assertEquals(7, events.size)
+        assertEquals("2026-10-26", events.first().date)
+        assertEquals("14:10", events.first().startTime)
+        assertEquals("17:50", events.first().endTime)
+    }
+
+    @Test fun `不推测合并时间块内部单节作息`() {
+        val value = ScheduleImport(semesterStartMonday = "2026-09-07",
+            periodTimeTable = mapOf("6-9" to "14:10-17:50"),
+            courses = listOf(CourseSegment("操作系统", 1, "1-14", "6-7")))
+        val failure = runCatching { managedScheduleImport(value, 42, "测试课表") }.exceptionOrNull()
+        assertTrue(failure is IllegalArgumentException)
+        assertTrue(failure!!.message.orEmpty().contains("操作系统"))
+        assertTrue(failure.message.orEmpty().contains("第 7 节结束"))
+    }
 
     @Test
     fun `读取 xlsx 还原表格并保留空单元格对齐`() {

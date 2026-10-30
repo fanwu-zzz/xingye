@@ -5,7 +5,8 @@ import java.time.LocalDate
 import java.util.UUID
 
 /** 同时保存识别出的原始周次和节次规则，避免展开后丢失重复课程关系。 */
-fun managedScheduleImport(value: ScheduleImport, conversationId: Long, name: String): Pair<Semester, List<RecurringCourse>> {
+fun managedScheduleImport(value: ScheduleImport, conversationId: Long, name: String,
+                          today: LocalDate = LocalDate.now()): Pair<Semester, List<RecurringCourse>> {
     fun identity(text: String) = UUID.nameUUIDFromBytes(text.toByteArray(Charsets.UTF_8)).toString()
     val id = identity("schedule:$conversationId")
     val periods = value.periodTimeTable.orEmpty().map { (key, time) ->
@@ -19,7 +20,7 @@ fun managedScheduleImport(value: ScheduleImport, conversationId: Long, name: Str
     semester.validate()
     val courses = value.courses.distinct().map { c ->
         RecurringCourse(identity("$id|${c.name}|${c.dayOfWeek}|${c.weeks}|${c.periods}|${c.room}"), id,
-            c.name, c.dayOfWeek, c.weeks, c.periods, c.room, from = LocalDate.now().toString(), source = name)
+            c.name, c.dayOfWeek, c.weeks, c.periods, c.room, from = today.toString(), source = name)
     }
     courses.forEach { expandCourse(it, semester) }
     return semester to courses

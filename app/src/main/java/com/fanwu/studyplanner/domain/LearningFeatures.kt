@@ -77,9 +77,15 @@ fun expandCourse(course: RecurringCourse, semester: Semester): List<CalendarEven
     require(weeks.isNotEmpty() && weeks.all { it in 1..semester.weeks }) { "周次必须位于学期内，例如 1-16单周 或 1-4,6-16" }
     val periods = ScheduleExpander.parsePeriods(course.periods)
     require(periods.zipWithNext().all { (a, b) -> b == a + 1 }) { "一次课程的节次必须连续；不连续节次请分成两个课程段" }
-    require(periods.isNotEmpty() && periods.all { n -> semester.periods.any { n in it.number..it.through } }) { "课程引用了未设置的节次" }
-    require(semester.periods.any { it.number == periods.first() && it.through == periods.last() } ||
-        (semester.periods.any { it.number == periods.first() && it.through == it.number } && semester.periods.any { it.number == periods.last() && it.through == it.number })) { "只有合并节次的总时间，请补充单节作息后再拆分课程" }
+    require(periods.isNotEmpty() && periods.all { n -> semester.periods.any { n in it.number..it.through } }) {
+        "《${course.name}》第 ${course.periods} 节缺少作息时间，请补充这些节次的起止时间。"
+    }
+    require(semester.periods.any { it.number == periods.first() } &&
+        semester.periods.any { it.through == periods.last() }) {
+        "《${course.name}》第 ${course.periods} 节的起止时间不完整。现有作息为 " +
+            semester.periods.joinToString("、") { "${it.number}-${it.through} 节 ${it.start}—${it.end}" } +
+            "；请补充第 ${periods.first()} 节开始、第 ${periods.last()} 节结束的时间，或提供各单节作息。"
+    }
     val table = semester.periods.associate { (if (it.number == it.through) it.number.toString() else "${it.number}-${it.through}") to "${it.start}-${it.end}" }
     val activeWeeks = weeks.filterNot { it in course.exceptionWeeks }
     return ScheduleExpander.expand(listOf(CourseSegment(course.name, course.day, activeWeeks.joinToString(","), course.periods, course.room)),
@@ -88,7 +94,8 @@ fun expandCourse(course: RecurringCourse, semester: Semester): List<CalendarEven
         .map { it.copy(recurringCourseId = course.id, originalOccurrenceDate = it.date, subject = course.name) }
 }
 
-fun overlaps(a: CalendarEvent, b: CalendarEvent) = a.date == b.date && a.startTime < b.endTime && b.startTime < a.endTime
+fun overlaps(a: CalendarEvent, b: CalendarEvent) = a.type != EventType.DEADLINE && b.type != EventType.DEADLINE &&
+    a.date == b.date && a.startTime < b.endTime && b.startTime < a.endTime
 
 data class WeekReview(val monday: LocalDate, val text: String, val taskCount: Int, val actualMs: Long)
 

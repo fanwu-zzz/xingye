@@ -19,10 +19,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.*
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.fanwu.studyplanner.domain.*
+import com.fanwu.studyplanner.data.agent.AgentStatus
+import com.fanwu.studyplanner.data.agent.AgentPreferences
+import com.fanwu.studyplanner.data.agent.publicWebUrl
 import com.fanwu.studyplanner.ui.components.*
 import com.fanwu.studyplanner.ui.theme.*
 import kotlinx.serialization.json.*
@@ -121,6 +130,12 @@ private fun ChatDetail(vm: ChatViewModel) {
     val notice by vm.notice.collectAsStateWithLifecycle()
     val pending by vm.pendingPlan.collectAsStateWithLifecycle()
     val latest by vm.latestPlan.collectAsStateWithLifecycle()
+    val failedInput by vm.failedInput.collectAsStateWithLifecycle()
+    val applying by vm.isApplying.collectAsStateWithLifecycle()
+    val agent by vm.agentRun.collectAsStateWithLifecycle()
+    val preferences by vm.agentPreferences.collectAsStateWithLifecycle()
+    var preferencesDialog by remember { mutableStateOf(false) }
+    var showSteps by remember { mutableStateOf(false) }
     val id by vm.currentConversationId.collectAsStateWithLifecycle()
     val conversation by vm.currentConversation.collectAsStateWithLifecycle()
     val importing = conversation?.mode == ConversationMode.IMPORT_SCHEDULE
@@ -129,29 +144,27 @@ private fun ChatDetail(vm: ChatViewModel) {
         uri?.let { vm.importScheduleFile(it, context.displayNameOf(it)) }
     }
     var input by rememberSaveable(id) { mutableStateOf("") }
-    var lastSubmitted by rememberSaveable(id) { mutableStateOf("") }
     var generatingConfirm by remember { mutableStateOf(false) }
     var clearConfirm by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
-    val busy = sending || generating
+    val busy = sending || generating || applying
     val cached = latest?.takeIf { it.conversationId == id }
-    LaunchedEffect(messages.size) { if (messages.isNotEmpty()) listState.scrollToItem(messages.lastIndex) }
-    LaunchedEffect(sending, error) {
-        if (!sending && error != null && lastSubmitted.isNotBlank() && input.isBlank()) input = lastSubmitted
+    LaunchedEffect(messages.size, error, notice) {
+        listState.scrollToItem(messages.size.coerceAtLeast(1))
     }
     LaunchedEffect(pending, generatingConfirm, clearConfirm) {
         if (pending != null || generatingConfirm || clearConfirm) { focus.clearFocus(); keyboard?.hide() }
     }
-    BrutalPage(conversation?.name ?: "AI 对话", if (importing) "课表导入 · 解析后预览确认" else "学习计划 · 讨论目标后生成",
+    BrutalPage(conversation?.name ?: "AI 对话", if (importing) "课表导入 · 解析后预览确认" else "学习规划智能体 · 查询、规划、确认",
         vm::backToList, scrollable = false, modifier = Modifier.navigationBarsPadding().imePadding(), actions = {
             BrutalIconButton(Icons.Outlined.DeleteOutline, "清空当前会话消息", { clearConfirm = true })
         }) {
         LazyColumn(Modifier.weight(1f), state = listState, verticalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(bottom = 12.dp)) {
             if (messages.isEmpty()) item {
                 BrutalEmpty(if (importing) "让课表自己排进日历" else "先聊聊你想完成什么",
-                    if (importing) "上传教务系统导出的 Excel；学期日期和节次时间可以在对话中补充。" else "告诉我学习内容、考试日期、每天可用时间，以及当前掌握程度。")
+                    if (importing) "上传教务系统导出的 Excel；学期日期和节次时间可以在对话中补充。" else "告诉我目标和空闲时间。智能体可按需查询本地学习数据和联网查资料，相关信息会发送给 DeepSeek；日历变更先预览确认。联网可在学习偏好中关闭。")
                 if (!importing) {
                     Spacer(Modifier.height(16.dp))
                     BrutalChoice("试试：四周复习计划", false, { input = "我想在四周内完成复习，每晚有一小时。请先问我需要补充哪些信息。" }, Modifier.fillMaxWidth())
@@ -163,46 +176,145 @@ private fun ChatDetail(vm: ChatViewModel) {
                     Text(if (user) "我" else "AI 学习搭子", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(bottom = 6.dp))
                     Box(Modifier.widthIn(max = 640.dp).fillMaxWidth(if (user) .9f else 1f)
                         .background(if (user) BrutalCyan else BrutalWhite).border(2.dp, BrutalBlack).padding(16.dp)) {
-                        SelectionContainer { Text(message.displayText(), style = MaterialTheme.typography.bodyLarge) }
+                        SelectionContainer { LinkedMessageText(message.displayText()) }
+                    }
+                }
+            }
+            item(key = "feedback") {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    agent?.takeIf { !importing && it.conversationId == id }?.let { run ->
+                        Text(when (run.status) {
+                            AgentStatus.RUNNING -> if (busy) "正在查询和规划 · 可取消" else "处理曾中断 · 可继续恢复"
+                            AgentStatus.WAITING_CONFIRMATION -> "草稿已就绪 · 尚未写入日历"
+                            AgentStatus.APPLIED -> "已实际保存${run.appliedIds.size}项到日历"
+                            AgentStatus.COMPLETED -> "已回复 · 本轮未写入日历"
+                            AgentStatus.CANCELLED -> "已取消 · 进度已保存"
+                            AgentStatus.FAILED -> "处理失败 · 进度已保存"
+                            AgentStatus.LIMIT_REACHED -> "达到本次处理上限 · 请缩小目标后发送"
+                        }, style = MaterialTheme.typography.bodySmall)
+                        (if (showSteps) run.steps else run.steps.takeLast(3)).forEach { Text("· $it", style = MaterialTheme.typography.bodySmall) }
+                        if (run.webRequests > 0) Text("本轮联网尝试 ${run.webRequests}/6 次 · 来源随回复保存", style = MaterialTheme.typography.bodySmall)
+                        if (run.steps.size > 3) TextButton({ showSteps = !showSteps }) { Text(if (showSteps) "收起处理步骤" else "查看全部处理步骤", color = BrutalBlack) }
+                        if (!busy && run.status in listOf(AgentStatus.RUNNING, AgentStatus.CANCELLED, AgentStatus.FAILED)) {
+                            TextButton(vm::resumeAgent) { Text("继续上次处理", color = BrutalBlack) }
+                        }
+                    }
+                    notice?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                    error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = BrutalDanger) }
+                    failedInput?.let { failed ->
+                        TextButton({ input = failed; vm.clearFailedInput() }, enabled = input.isBlank()) {
+                            Text("恢复上次输入", color = BrutalBlack)
+                        }
                     }
                 }
             }
         }
         if (busy) Text(if (generating) "正在整理计划，请稍候…" else "AI 正在思考，请稍候…", style = MaterialTheme.typography.bodySmall)
-        notice?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = BrutalBlack) }
-        error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = BrutalDanger, maxLines = 3) }
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            if (importing) {
-                BrutalButton(if (sending) "正在解析课表…" else "选择 Excel 课表", { picker.launch(IMPORT_MIME_TYPES) }, enabled = !busy, icon = Icons.Outlined.UploadFile)
-            } else if (messages.any { it.role == "assistant" }) {
-                BrutalButton(if (generating) "正在生成计划…" else "生成学习计划", { generatingConfirm = true }, enabled = !busy, icon = Icons.Outlined.AutoAwesome)
+            if (!importing) {
+                if (sending) TextButton(vm::cancelAgent) { Text("取消处理并保留进度", color = BrutalBlack) }
+                else Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton({ preferencesDialog = true }, enabled = !busy) { Text("学习偏好", color = BrutalBlack) }
+                    Text(if (preferences.allowWebSearch) "可按需联网查资料" else "联网检索已关闭", style = MaterialTheme.typography.bodySmall)
+                }
             }
-            if (cached != null && pending == null) {
+            if (importing) {
+                Text(when {
+                    cached?.applied == true -> "已导入 · 可到课表或日历查看"
+                    cached != null -> "尚未导入 · 请预览并确认"
+                    sending -> "正在处理 · 完成后预览确认"
+                    else -> "尚未导入 · 补齐信息后可预览"
+                }, style = MaterialTheme.typography.bodySmall)
+                if (messages.isNotEmpty() || cached != null) {
+                    BrutalButton(if (cached?.applied == true) "查看已导入课表" else "预览并确认导入",
+                        vm::reopenLatestPlan, enabled = cached != null && !busy, icon = Icons.Outlined.Preview)
+                    TextButton({ picker.launch(IMPORT_MIME_TYPES) }, Modifier.fillMaxWidth(), enabled = !busy) {
+                        Text("选择 / 更换 Excel 课表", color = BrutalBlack)
+                    }
+                } else {
+                    BrutalButton("选择 Excel 课表", { picker.launch(IMPORT_MIME_TYPES) }, enabled = !busy, icon = Icons.Outlined.UploadFile)
+                }
+            } else if (messages.any { it.role == "assistant" }) {
+                BrutalButton(if (generating) "正在生成计划…" else "让智能体制定计划", { generatingConfirm = true }, enabled = !busy, icon = Icons.Outlined.AutoAwesome)
+            }
+            if (!importing && cached != null && pending == null) {
                 TextButton(vm::reopenLatestPlan, Modifier.fillMaxWidth()) {
                     Text(if (cached.applied) "查看已应用的计划" else "继续预览上次计划", color = BrutalBlack)
                 }
             }
             Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                BrutalField(input, { input = it }, if (error != null) "可编辑后重新发送" else "输入学习目标或补充信息",
+                BrutalField(input, { input = it }, if (importing) "补充课表信息或提问" else "输入学习目标或补充信息",
                     Modifier.weight(1f), singleLine = false)
-                Box(Modifier.width(80.dp)) {
+                Box(Modifier.width(96.dp)) {
                     BrutalButton("发送", {
-                        lastSubmitted = input
-                        vm.send(input)
-                        input = ""
+                        if (vm.send(input)) input = ""
                     }, enabled = input.isNotBlank() && !busy, color = BrutalYellow)
                 }
             }
         }
     }
     pending?.let { draft ->
-        PlanPanelDialog(draft.plan, draft.name, draft.applied, vm::renamePlan, vm::confirmPlan, vm::dismissPlan)
+        PlanPanelDialog(draft.plan, draft.name, draft.applied, vm::renamePlan, vm::confirmPlan, vm::dismissPlan,
+            importing = draft.coursePreview != null, applying = applying, error = error, allowEmpty = draft.coursePreview != null)
     }
-    if (generatingConfirm) BrutalConfirm("生成学习计划？", "AI 将根据当前对话生成计划；你可以先预览并修改计划名，再决定是否应用到日历。", "开始生成",
+    if (generatingConfirm) BrutalConfirm("制定学习计划？", "智能体将根据当前对话查询真实日程和待办，按联网设置查资料，必要时向你追问；草稿经预览确认后才写入日历。", "开始规划",
         { generatingConfirm = false; vm.generatePlan() }, { generatingConfirm = false })
+    if (preferencesDialog) {
+        var text by remember(preferences) { mutableStateOf(preferences.text) }
+        var maximum by remember(preferences) { mutableStateOf(preferences.maxMinutesPerDay?.toString().orEmpty()) }
+        var allowWeb by remember(preferences) { mutableStateOf(preferences.allowWebSearch) }
+        var preferenceError by remember { mutableStateOf<String?>(null) }
+        BrutalDialog("学习偏好", { preferencesDialog = false }, actions = {
+            preferenceError?.let { Text(it, color = BrutalDanger) }
+            BrutalButton("保存偏好", {
+                preferenceError = runCatching {
+                    AgentPreferences(text, if (maximum.isBlank()) null else maximum.toIntOrNull() ?: error("每日上限应为整数"), allowWeb).validate()
+                }.exceptionOrNull()?.message
+                if (preferenceError == null) { vm.saveAgentPreferences(text, maximum, allowWeb); preferencesDialog = false }
+            })
+            TextButton({ text = ""; maximum = "" }) { Text("清空填写内容", color = BrutalBlack) }
+        }) {
+            Text("由你维护的偏好会在后续规划时发送给 DeepSeek。这里只保存安排习惯，不需要填写密钥或个人身份信息。", style = MaterialTheme.typography.bodySmall)
+            BrutalField(text, { text = it.take(1000) }, "安排偏好（如：周末不早起）", singleLine = false)
+            BrutalField(maximum, { maximum = it.filter(Char::isDigit).take(3) }, "每日计划学习上限（分钟，可留空）")
+            Text("每日上限包含日历中已有的学习安排；截止任务不计时长。保存后用于下一次规划和草稿确认。", style = MaterialTheme.typography.bodySmall)
+            BrutalChoice("允许按需联网查资料", allowWeb, { allowWeb = !allowWeb }, Modifier.fillMaxWidth())
+            Text("检索词和网址发送至 DeepSeek，沿用现有 API Key。搜索与网页读取按服务规则另行计费，每轮合计最多6次；不会因此自动写入日历。", style = MaterialTheme.typography.bodySmall)
+        }
+    }
     if (clearConfirm) BrutalConfirm("清空当前会话？", "当前会话的全部消息会被删除，已经应用到日历的安排不受影响。", "确认清空",
         { vm.clearHistory(); clearConfirm = false }, { clearConfirm = false }, true)
 }
+
+@Composable
+private fun LinkedMessageText(value: String) {
+    val uriHandler = LocalUriHandler.current
+    var linkError by remember(value) { mutableStateOf(false) }
+    val annotated = remember(value, uriHandler) {
+        buildAnnotatedString {
+            var start = 0
+            WEB_LINK.findAll(value).forEach { match ->
+                val raw = match.value.trimEnd('.', ',', ';', '。', '，', '；', '、')
+                val safe = runCatching { publicWebUrl(raw) }.getOrNull()
+                append(value.substring(start, match.range.first))
+                if (safe == null) append(raw) else withLink(LinkAnnotation.Url(safe,
+                    TextLinkStyles(style = SpanStyle(color = BrutalBlack, textDecoration = TextDecoration.Underline))) {
+                    linkError = runCatching { uriHandler.openUri(safe) }.isFailure
+                }) { append(raw) }
+                start = match.range.first + raw.length
+                append(value.substring(start, match.range.last + 1))
+                start = match.range.last + 1
+            }
+            append(value.substring(start))
+        }
+    }
+    Column {
+        Text(annotated, style = MaterialTheme.typography.bodyLarge)
+        if (linkError) Text("无法打开链接，可长按复制网址到浏览器。", style = MaterialTheme.typography.bodySmall, color = BrutalDanger)
+    }
+}
+
+private val WEB_LINK = Regex("https?://[^\\s<>\"）)\\]]+", RegexOption.IGNORE_CASE)
 
 private fun ChatMessage.displayText(): String {
     val raw = content.trim()

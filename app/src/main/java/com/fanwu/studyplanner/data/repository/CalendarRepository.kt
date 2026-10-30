@@ -4,6 +4,7 @@ import com.fanwu.studyplanner.data.local.CalendarEventDao
 import com.fanwu.studyplanner.data.local.toDomain
 import com.fanwu.studyplanner.data.local.toEntity
 import com.fanwu.studyplanner.domain.CalendarEvent
+import com.fanwu.studyplanner.domain.hasValidTimeRange
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import com.fanwu.studyplanner.reminders.ReminderRuntime
@@ -20,9 +21,13 @@ class CalendarRepository(private val dao: CalendarEventDao, private val database
         dao.observeByDateRange(startDate, endDate)
             .map { entities -> entities.map { it.toDomain() } }
 
-    suspend fun insert(event: CalendarEvent): Long = ReminderRuntime.calendarMutation { dao.insert(event.toEntity()) }
+    suspend fun insert(event: CalendarEvent): Long {
+        require(event.hasValidTimeRange()) { "日程时间无效" }
+        return ReminderRuntime.calendarMutation { dao.insert(event.toEntity()) }
+    }
 
     suspend fun update(event: CalendarEvent) {
+        require(event.hasValidTimeRange()) { "日程时间无效" }
         if (event.recurringCourseId != null && database != null) LearningRepository(database).except(event, event)
         else ReminderRuntime.calendarMutation { dao.update(event.toEntity()) }
     }

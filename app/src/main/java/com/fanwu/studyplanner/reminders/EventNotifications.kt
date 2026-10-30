@@ -25,8 +25,8 @@ class EventNotifications(private val context: Context) : ReminderDelivery {
     }
 
     private fun ensureChannel() {
-        manager.createNotificationChannel(NotificationChannel(CHANNEL, "日程开始提醒", NotificationManager.IMPORTANCE_DEFAULT).apply {
-            description = "学习任务、考试与课程的开始提醒"
+        manager.createNotificationChannel(NotificationChannel(CHANNEL, "日程与截止提醒", NotificationManager.IMPORTANCE_DEFAULT).apply {
+            description = "学习任务、考试与课程的开始提醒，以及作业等任务的截止提醒"
             lockscreenVisibility = Notification.VISIBILITY_PRIVATE
         })
     }
@@ -38,13 +38,13 @@ class EventNotifications(private val context: Context) : ReminderDelivery {
             .putExtra(OPEN_EVENT, event.id)
             .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         val target = PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val type = when (event.type) { EventType.CLASS -> "课程"; EventType.EXAM -> "考试"; else -> "学习任务" }
+        val type = when (event.type) { EventType.CLASS -> "课程"; EventType.EXAM -> "考试"; EventType.DEADLINE -> "截止任务"; else -> "学习任务" }
         val public = NotificationCompat.Builder(context, CHANNEL).setSmallIcon(R.drawable.ic_focus_notification)
             .setContentTitle(context.getString(R.string.calendar_reminder_public_title, context.getString(R.string.app_name)))
             .setContentText("打开应用查看安排").build()
         val notification = NotificationCompat.Builder(context, CHANNEL).setSmallIcon(R.drawable.ic_focus_notification)
             .setContentTitle("$type · ${event.title}")
-            .setContentText("${event.date} ${event.startTime} 开始")
+            .setContentText("${event.date} ${event.startTime} " + if (event.type == EventType.DEADLINE) "截止，请及时完成" else "开始")
             .setContentIntent(target).setAutoCancel(true).setOnlyAlertOnce(true)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE).setPublicVersion(public)
             .setCategory(NotificationCompat.CATEGORY_EVENT).build()

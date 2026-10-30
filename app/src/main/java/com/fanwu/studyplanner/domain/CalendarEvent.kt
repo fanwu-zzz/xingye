@@ -11,7 +11,8 @@ import java.time.LocalTime
 enum class EventType {
     EXAM,       // 考试
     CLASS,      // 课程
-    STUDY_TASK  // 学习任务
+    STUDY_TASK, // 有起止时间的学习安排
+    DEADLINE    // 只记录截止时刻的待办，startTime 与 endTime 相同
 }
 
 /**
@@ -39,10 +40,28 @@ data class CalendarEvent(
 
 /** 事件时长（分钟），时间串非法时按 0 计 */
 fun CalendarEvent.durationMinutes(): Int {
+    if (type == EventType.DEADLINE) return 0
     val start = startTime.toMinutesOrNull() ?: return 0
     val end = endTime.toMinutesOrNull() ?: return 0
     return (end - start).coerceAtLeast(0)
 }
+
+/** 截止事项是一个时刻，不占用日历中的学习时段。 */
+fun CalendarEvent.hasValidTimeRange(): Boolean = runCatching {
+    val format = Regex("\\d{2}:\\d{2}")
+    if (!format.matches(startTime) || !format.matches(endTime)) return@runCatching false
+    val start = LocalTime.parse(startTime)
+    val end = LocalTime.parse(endTime)
+    if (type == EventType.DEADLINE) start == end else start < end
+}.getOrDefault(false)
+
+fun CalendarEvent.timeText(): String =
+    if (type == EventType.DEADLINE) "截止 $endTime" else "$startTime — $endTime"
+
+fun CalendarEvent.isOverdue(now: LocalDateTime = LocalDateTime.now()): Boolean =
+    !isDone && runCatching { !LocalDate.parse(date).atTime(LocalTime.parse(endTime)).isAfter(now) }.getOrDefault(false)
+
+val EventType.isTask: Boolean get() = this == EventType.STUDY_TASK || this == EventType.DEADLINE
 
 /** 分钟数格式化为 "6h" / "2.5h" */
 fun formatHours(minutes: Int): String =

@@ -16,7 +16,7 @@ class FocusViewModel(private val context: Context, private val repository: Focus
     val active = repository.active.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
     val history = repository.history.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val tasks = CalendarRepository(AppDatabase.getInstance(context).calendarEventDao()).observeAllTasks()
-        .map { tasks -> tasks.filter { it.type == EventType.STUDY_TASK && !it.isDone } }
+        .map { tasks -> tasks.filter { it.type.isTask && !it.isDone } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val now = flow {
         while (true) { emit(repository.clock.now()); delay(500) }

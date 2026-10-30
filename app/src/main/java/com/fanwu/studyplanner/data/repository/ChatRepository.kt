@@ -23,6 +23,8 @@ import com.fanwu.studyplanner.domain.ConversationMode
 import com.fanwu.studyplanner.domain.EventType
 import com.fanwu.studyplanner.domain.ScheduleImport
 import com.fanwu.studyplanner.domain.StudyPlan
+import com.fanwu.studyplanner.domain.hasValidTimeRange
+import com.fanwu.studyplanner.domain.timeText
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.decodeFromString
@@ -95,14 +97,7 @@ class ChatRepository(
     suspend fun sendMessage(conversationId: Long, text: String): Result<Unit> = try {
         val apiKey = resolveApiKey()
 
-        dao.insert(
-            ChatMessageEntity(
-                conversationId = conversationId,
-                role = "user",
-                content = text,
-                timestamp = System.currentTimeMillis()
-            )
-        )
+        insertUserMessage(conversationId, text)
 
         val history = dao.getByConversation(conversationId)
         val request = ChatCompletionRequest(
@@ -152,7 +147,7 @@ class ChatRepository(
             "暂无"
         } else {
             existing.joinToString("\n") { event ->
-                "${event.date} ${event.startTime}-${event.endTime} ${event.title}"
+                "${event.date} ${event.toDomain().timeText()} ${event.title}"
             }
         }
 
@@ -207,6 +202,7 @@ class ChatRepository(
         groupName: String,
         replaceExisting: Boolean = false
     ): Result<Int> = try {
+        require(plan.events.all { it.hasValidTimeRange() }) { "计划中有无效时间，请重新生成预览" }
         val tag = groupName.trim().takeIf { it.isNotEmpty() }
         ReminderRuntime.calendarMutation {
             calendarDao.applyEvents(plan.events.map { it.copy(planName = tag).toEntity() }, tag.takeIf { replaceExisting })
@@ -220,18 +216,14 @@ class ChatRepository(
      * 课表导入：把文件文本（或用户对追问的回答）发给模型。
      * 模型只负责还原课程段，周次展开与时间换算由本地代码完成，避免模型算错日期。
      */
-    suspend fun importSchedule(conversationId: Long, userText: String): Result<ScheduleImport> =
+    suspend fun importSchedule(
+        conversationId: Long, userText: String,
+        applicationState: String = "尚未导入。解析成功后仍需用户打开预览并确认。"
+    ): Result<ScheduleImport> =
         try {
             val apiKey = resolveApiKey()
 
-            dao.insert(
-                ChatMessageEntity(
-                    conversationId = conversationId,
-                    role = "user",
-                    content = userText,
-                    timestamp = System.currentTimeMillis()
-                )
-            )
+            insertUserMessage(conversationId, userText)
 
             val history = dao.getByConversation(conversationId)
             val request = ChatCompletionRequest(
@@ -239,14 +231,16 @@ class ChatRepository(
                     add(
                         ApiMessage(
                             role = "system",
-                            content = IMPORT_SCHEDULE_PROMPT + todayContext()
+                            content = IMPORT_SCHEDULE_PROMPT +
+                                "\n今天是 ${LocalDate.now()}。学期首周允许早于今天，不要为此改到下一年。"
                         )
                     )
                     history.forEach { message ->
                         add(ApiMessage(role = message.role, content = message.content))
                     }
+                    add(ApiMessage(role = "system", content = "应用实际状态（优先于历史回复）：$applicationState"))
                 },
-                temperature = 0.1
+                temperature = 0.4
             )
 
             val response = api.chatCompletions("Bearer $apiKey", request)
@@ -255,6 +249,7 @@ class ChatRepository(
                 throw IllegalStateException("模型没有返回内容")
             }
 
+            val parsed = parseScheduleImport(reply)
             dao.insert(
                 ChatMessageEntity(
                     conversationId = conversationId,
@@ -264,13 +259,28 @@ class ChatRepository(
                 )
             )
 
-            Result.success(parseScheduleImport(reply))
+            Result.success(parsed)
         } catch (e: Exception) {
             Result.failure(IllegalStateException(e.toFriendlyMessage(), e))
         }
 
     suspend fun clearHistory(conversationId: Long) {
         dao.clear(conversationId)
+    }
+
+    /** 重进会话时恢复最近的结构化结果；普通问答不会覆盖课表草稿。 */
+    suspend fun latestScheduleImport(conversationId: Long): ScheduleImport? =
+        dao.getByConversation(conversationId).asReversed().firstNotNullOfOrNull { message ->
+            if (message.role != "assistant") null else
+                runCatching { parseScheduleImport(message.content) }.getOrNull()?.takeUnless { it.isChatReply }
+        }
+
+    private suspend fun insertUserMessage(conversationId: Long, text: String) {
+        val last = dao.getByConversation(conversationId).lastOrNull()
+        // 网络失败重试时复用已落库的用户消息，避免对话中出现连续重复内容。
+        if (last?.role == "user" && last.content == text) return
+        dao.insert(ChatMessageEntity(conversationId = conversationId, role = "user",
+            content = text, timestamp = System.currentTimeMillis()))
     }
 
     private fun resolveApiKey(): String {
@@ -299,10 +309,6 @@ class ChatRepository(
         val today = LocalDate.now()
         // 拒绝模型因不知道当前日期而生成的过去日期，以及过远的日期
         if (parsedDate.isBefore(today) || parsedDate.isAfter(today.plusYears(1))) return null
-        val startTime = runCatching { LocalTime.parse(start, TIME_FORMAT) }.getOrNull() ?: return null
-        val endTime = runCatching { LocalTime.parse(end, TIME_FORMAT) }.getOrNull() ?: return null
-        if (!endTime.isAfter(startTime)) return null
-
         val type = runCatching {
             EventType.valueOf(args.stringValue("type").orEmpty())
         }.getOrDefault(EventType.STUDY_TASK)
@@ -314,7 +320,7 @@ class ChatRepository(
             endTime = end,
             type = type,
             note = args.stringValue("note")?.trim()?.takeIf { it.isNotEmpty() }
-        )
+        ).takeIf { it.hasValidTimeRange() }
     }
 
     private fun JsonObject.stringValue(key: String): String? =
@@ -336,7 +342,8 @@ class ChatRepository(
         if (parsed.isNotSchedule) {
             throw IllegalStateException(parsed.message.ifBlank { "这份文件看起来不是课表" })
         }
-        if (parsed.needsMoreInfo) return parsed
+        if (parsed.needsMoreInfo || parsed.isChatReply) return parsed
+        require(parsed.status == "ok") { "课表解析状态无法识别，请重试" }
         if (parsed.courses.isEmpty()) {
             throw IllegalStateException(parsed.message.ifBlank { "没有从文件里识别到课程" })
         }
@@ -380,15 +387,17 @@ class ChatRepository(
 
     private companion object {
         const val SYSTEM_PROMPT =
-            "你是一个中文学习计划助手。请和用户讨论学习目标、考试安排和时间限制，" +
-                "帮助用户制定具体、可执行的学习计划。回答简洁清晰，必要时给出时间安排建议。"
+            "你是星页里的 AI 学习搭子，用自然、友善的中文和用户交流。先回答用户当前的问题，" +
+                "结合已有信息讨论目标、考试和时间限制；只追问真正缺失的信息，不重复总结或套用固定开场。" +
+                "建议具体可执行，简单问题简短回答，复杂问题再展开。计划需用户点击生成、预览并应用才会写入日历，不能声称已执行。"
 
         const val PLAN_SYSTEM_PROMPT =
             "你是一个中文学习计划助手。请根据对话历史制定可执行的学习计划：" +
                 "先给出简短的计划说明，然后为每个学习任务调用 add_event 工具。" +
                 "日期使用 YYYY-MM-DD 格式，时间使用 HH:mm 格式，" +
-                "类型从 EXAM（考试）、CLASS（课程）、STUDY_TASK（学习任务）中选择。" +
-                "避免与已有安排冲突，任务时长建议 30 分钟到 2 小时。"
+                "类型从 EXAM（考试）、CLASS（课程）、STUDY_TASK（安排学习时段）、DEADLINE（作业或报告等截止任务）中选择。" +
+                "截止任务的 startTime 和 endTime 都填写同一个截止时刻；只有截止日期时使用 23:59，不编造学习时长。" +
+                "截止任务不占用时段，实际复习或写作业另设 STUDY_TASK。避免与已有时段冲突，学习时段建议 30 分钟到 2 小时。"
 
         const val ADD_EVENT_TOOL_NAME = "add_event"
 
@@ -397,8 +406,13 @@ class ChatRepository(
          * 不换算日期、不生成日历事件，这两件事由本地代码完成。
          */
         const val IMPORT_SCHEDULE_PROMPT = """
-你是星页的「课表导入助手」，只负责把课表表格识别成结构化课程段。
+你是星页的「课表导入助手」，负责识别课表，也用自然、友善的中文回答用户当前的问题。
 你不负责换算日期，也不负责生成日历事件。
+先理解用户这一轮在问什么：询问是否导入、操作方法或解释结果时，返回 status="chat"，
+只在 message 中直接回答，不必重发课程和作息，不要机械复述上一轮识别摘要。
+用户上传文件或补充、修正学期/作息/课程信息时，返回完整的最新结构化结果，保留前文已经确认的数据。
+实际导入状态以程序提供的「应用实际状态」为准。识别完成仅表示待预览，不能声称已导入、已写入或已安排。
+遇到本地校验问题时解释具体阻塞点，告诉用户还需补充什么；不要用“整理完成”掩盖失败。
 
 # 一、输入格式
 用户会发送一条以「【课表文件】」开头的消息，内容是本地程序把 Excel 转成的纯文本表格：
@@ -432,6 +446,9 @@ class ChatRepository(
 1. semesterStartMonday：学期第 1 周的周一日期，格式 YYYY-MM-DD。
 2. periodTimeTable：节次到时间的映射，如 {"1-2":"08:00-09:40","6-7":"14:00-15:40"}。
    若表格里已经写了具体时间，直接采用，不要重复询问。
+   保留用户实际提供的单节或合并节次时间，不平均拆分、不套用默认作息。
+   连堂课可以跨多个完整时间块，例如 6-9 节可使用 6-7 和 8-9 两块的首尾时间；
+   但只有 6-9 节总时间时，无法得出 6-7 节何时结束，应返回 need_info 并具体询问缺少的边界时间。
 缺失时：先把能解析的部分解析完，把缺失项放入 missing，
 再用一句自然语言向用户询问。一次最多问两项，并给出示例方便用户照着回答。
 用户回答「9月1日开学」这类模糊表述时，请结合当前日期推断年份，
@@ -441,7 +458,7 @@ class ChatRepository(
 只输出一个 JSON 对象，不要 markdown 代码块，不要任何解释性文字：
 
 {
-  "status": "ok | need_info | not_schedule",
+  "status": "ok | need_info | not_schedule | chat",
   "missing": ["semesterStartMonday", "periodTimeTable"],
   "semesterStartMonday": "2025-09-01",
   "periodTimeTable": {"1-2": "08:00-09:40", "6-7": "14:00-15:40"},
@@ -451,10 +468,11 @@ class ChatRepository(
   "dropped": [
     {"raw": "硬件综合设计 [18-20周]", "reason": "仅含周次，无上课时间"}
   ],
-  "message": "识别到 7 门课共 26 个时间段，其中 2 条仅有周次未导入。"
+  "message": "课表里找到了 26 个课程段，还有 2 条只有周次，暂时无法安排时间。接下来请打开预览核对，确认后才会导入。"
 }
 
-dayOfWeek 用 1~7 表示周一到周日。message 是直接展示给用户的自然语言摘要。
+dayOfWeek 用 1~7 表示周一到周日。message 直接展示给用户，应针对本轮问题自然回答，避免固定句式、重复参数和无关的总结。
+status="chat" 时可仅返回 {"status":"chat","message":"针对当前问题的回答"}。
 """
 
         val WEEKDAYS = listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")
@@ -475,7 +493,7 @@ dayOfWeek 用 1~7 表示周一到周日。message 是直接展示给用户的自
         val ADD_EVENT_TOOL = ToolDefinition(
             function = FunctionDefinition(
                 name = ADD_EVENT_TOOL_NAME,
-                description = "在用户日历中添加一个学习任务或考试安排。生成学习计划时每个任务调用一次。",
+                description = "生成一项待用户预览的学习安排、考试或截止任务。DEADLINE 的两个时间都必须等于截止时刻。",
                 parameters = buildJsonObject {
                     put("type", "object")
                     putJsonObject("properties") {
@@ -501,6 +519,7 @@ dayOfWeek 用 1~7 表示周一到周日。message 是直接展示给用户的自
                                 add("EXAM")
                                 add("CLASS")
                                 add("STUDY_TASK")
+                                add("DEADLINE")
                             }
                         }
                         putJsonObject("note") {

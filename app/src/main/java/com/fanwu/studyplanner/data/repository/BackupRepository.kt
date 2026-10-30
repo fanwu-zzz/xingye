@@ -24,7 +24,7 @@ data class RestorePreview(val backup: PlannerBackup, val before: PlannerBackup, 
                           val duplicates: Int, val conflicts: Int, val blockingReason: String? = null)
 
 class BackupRepository(private val db: AppDatabase) {
-    private val kinds = setOf("goal", "semester", "course", "review")
+    private val kinds = setOf("goal", "semester", "course", "review", "agent_preferences")
 
     private suspend fun snapshot(origin: String) = PlannerBackup(schemaVersion = 1, exportedAt = 0, appVersion = BuildConfig.VERSION_NAME,
         origin = origin, events = db.calendarEventDao().getAll().map { it.toDomain() },
@@ -61,7 +61,7 @@ class BackupRepository(private val db: AppDatabase) {
             require(e.id > 0 && e.title.isNotBlank() && e.title.length <= 1000)
             require(LocalDate.parse(e.date).toString() == e.date)
             require(Regex("\\d{2}:\\d{2}").matches(e.startTime) && Regex("\\d{2}:\\d{2}").matches(e.endTime))
-            require(LocalTime.parse(e.startTime) < LocalTime.parse(e.endTime)) { "备份中的事件时间无效" }
+            require(e.hasValidTimeRange()) { "备份中的事件时间无效" }
             require(e.completedAt == null || (e.isDone && e.completedAt > 0))
         }
         b.conversations.forEach { require(it.id > 0 && it.name.isNotBlank() && it.createdAt > 0) }
@@ -83,6 +83,7 @@ class BackupRepository(private val db: AppDatabase) {
         b.documents.forEach { d ->
             require(d.id.isNotBlank() && d.id != "backup-origin" && !d.id.startsWith("restore:") && d.kind in kinds)
             when (d.kind) {
+                "agent_preferences" -> { require(d.id == "agent-preferences"); d.decode<com.fanwu.studyplanner.data.agent.AgentPreferences>().validate() }
                 "goal" -> d.decode<GoalRevision>().also { require(it.id == d.id); it.validate() }
                 "semester" -> d.decode<Semester>().also { require(it.id == d.id); it.validate() }
                 "course" -> d.decode<RecurringCourse>().also { c ->

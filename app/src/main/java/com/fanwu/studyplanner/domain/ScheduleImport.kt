@@ -51,6 +51,7 @@ data class ScheduleImport(
 ) {
     val needsMoreInfo: Boolean get() = status == "need_info"
     val isNotSchedule: Boolean get() = status == "not_schedule"
+    val isChatReply: Boolean get() = status == "chat"
 }
 
 /** 模型偶尔会把周次/节次输出成数组，这里统一拼回逗号分隔的字符串 */
